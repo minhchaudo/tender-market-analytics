@@ -43,9 +43,7 @@ comparison: FIELD OP cmp_expr                  -> comparison
 ?cmp_term: cmp_atom
          | "(" cmp_expr ")"
 
-?cmp_atom: SIGNED_NUMBER                       -> number
-         | DATE                                -> date_value
-         | ESCAPED_STRING                      -> quoted_value
+?cmp_atom: ESCAPED_STRING                      -> quoted_value
          | phrase
 
 phrase: WORD+                                  -> phrase
@@ -53,15 +51,12 @@ phrase: WORD+                                  -> phrase
 FIELD: /[a-zA-Z_][a-zA-Z0-9_.-]*/
 OP: ":" | "=" | ">=" | "<=" | ">" | "<"
 
-DATE.20: /\d{2}-\d{2}-\d{2}/
-
 AND.10: "AND"
 OR.10: "OR"
 NOT.10: "NOT"
 
 WORD: /[^()\s:><="]+/
 
-%import common.SIGNED_NUMBER
 %import common.ESCAPED_STRING
 %import common.WS
 %ignore WS
@@ -104,11 +99,6 @@ class Phrase:
 
 
 @dataclass
-class DateValue:
-    raw: str
-
-
-@dataclass
 class Comparison:
     field: str
     op: str
@@ -140,15 +130,6 @@ class QueryTransformer(Transformer):
     def WORD(self, t: Token) -> str:
         return str(t)
 
-    def DATE(self, t: Token) -> str:
-        return str(t)
-
-    def number(self, items: list[Any]) -> Union[int, float]:
-        s = str(items[0])
-        if "." in s or "e" in s.lower():
-            return float(s)
-        return int(s)
-
     def phrase(self, items: list[str]) -> Phrase:
         return Phrase(" ".join(items))
 
@@ -156,9 +137,6 @@ class QueryTransformer(Transformer):
         raw = str(items[0])
         return Phrase(ast.literal_eval(raw))    
         
-    def date_value(self, items: list[Any]) -> DateValue:
-        return DateValue(str(items[0]))
-
     def comparison(self, items: list[Any]) -> Comparison:
         field, op, value = items
         return Comparison(field=field, op=op, value=value)
@@ -200,15 +178,8 @@ def parse_query(query: str) -> Any:
 
 class SQLCompileError(ValueError):
     pass
-
-
-def _looks_like_ddmmyy(value: str) -> bool:
-    try:
-        datetime.strptime(value, "%d-%m-%y")
-        return True
-    except ValueError:
-        return False
     
+
 def _unicode_casefold(s: Any) -> Any:
     if s is None:
         return None
@@ -216,42 +187,15 @@ def _unicode_casefold(s: Any) -> Any:
 
 
 def _normalize_date_ddmmyy_to_iso(value: str) -> str:
-    return datetime.strptime(value, "%d-%m-%y").strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.strptime(value, "%d-%m-%Y").strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _quote_identifier(name: str) -> str:
-    return '"' + name.replace('"', '""') + '"'
-
-
-def _quote_fts_phrase(value: str) -> str:
+def _quote(value: str) -> str:
     return '"' + value.replace('"', '""') + '"'
 
 
-def _is_text_field(field: str) -> bool:
-    return field in TEXT_FIELDS
-
-
-def _is_numeric_field(field: str) -> bool:
-    return field in NUMERIC_FIELDS
-
-
-def _is_date_field(field: str) -> bool:
-    return field in DATE_FIELDS
-
-
-def _column_for_field(field: str) -> str:
-    if field not in ALL_QUERY_FIELDS:
-        raise SQLCompileError(f"Unknown field: {field!r}")
-    return field
-
-
 def _coerce_numeric(value: Any, field: str) -> Union[int, float]:
-    if isinstance(value, (int, float)):
-        return value
-    if isinstance(value, DateValue):
-        raise SQLCompileError(f"Date literal {value.raw!r} is invalid for numeric field {field!r}")
-
-    text = value.value if isinstance(value, Phrase) else str(value)
+    text = value.value
     try:
         return float(text) if any(ch in text for ch in ".eE") else int(text)
     except ValueError as exc:
@@ -259,51 +203,18 @@ def _coerce_numeric(value: Any, field: str) -> Union[int, float]:
 
 
 def _coerce_date(value: Any, field: str) -> str:
-    if isinstance(value, DateValue):
-        return _normalize_date_ddmmyy_to_iso(value.raw)
-
-    text = value.value if isinstance(value, Phrase) else str(value)
-    if _looks_like_ddmmyy(text):
+    text = value.value
+    try:
         return _normalize_date_ddmmyy_to_iso(text)
-
-    raise SQLCompileError(f"Invalid date value {value!r} for field {field!r}; expected DD-MM-YY")
-
-
-def _coerce_text_scalar(value: Any, field: str) -> str:
-    if isinstance(value, (And, Or, Not)):
-        raise SQLCompileError(
-            f"Operator '=' on text field {field!r} requires text terms"
-        )
-    if isinstance(value, Phrase):
-        return value.value
-    if isinstance(value, DateValue):
-        return value.raw
-    return str(value)
-
-def _compile_text_match_expr(node: Any, field: str) -> str:
-    if isinstance(node, str):
-        return f'{field}:{_quote_fts_phrase(node)}'
-
-    if isinstance(node, Phrase):
-        return f'{field}:{_quote_fts_phrase(node.value)}'
-
-    if isinstance(node, And):
-        return "(" + " AND ".join(_compile_text_match_expr(child, field) for child in node.args) + ")"
-
-    if isinstance(node, Or):
-        return "(" + " OR ".join(_compile_text_match_expr(child, field) for child in node.args) + ")"
-
-    if isinstance(node, Not):
-        return f"(NOT {_compile_text_match_expr(node.arg, field)})"
-
-    raise SQLCompileError(f"Unsupported text MATCH expression: {node!r}")
+    except ValueError as exc:
+        raise SQLCompileError(f"Invalid date value {value!r} for field {field!r}; expected DD-MM-YYYY") from exc
 
 
-def _compile_text_exact_expr(node: Any, column_sql: str, field: str) -> tuple[str, list[Any]]:
+def _compile_fts_single_field_(node: Any, field: str) -> tuple[str, list[Any]]: 
     if isinstance(node, And):
         parts, params = [], []
         for child in node.args:
-            child_sql, child_params = _compile_text_exact_expr(child, column_sql, field)
+            child_sql, child_params = _compile_fts_single_field_(child, field)
             parts.append(f"({child_sql})")
             params.extend(child_params)
         return " AND ".join(parts), params
@@ -311,16 +222,55 @@ def _compile_text_exact_expr(node: Any, column_sql: str, field: str) -> tuple[st
     if isinstance(node, Or):
         parts, params = [], []
         for child in node.args:
-            child_sql, child_params = _compile_text_exact_expr(child, column_sql, field)
+            child_sql, child_params = _compile_fts_single_field_(child, field)
             parts.append(f"({child_sql})")
             params.extend(child_params)
         return " OR ".join(parts), params
 
     if isinstance(node, Not):
-        child_sql, child_params = _compile_text_exact_expr(node.arg, column_sql, field)
+        child_sql, child_params = _compile_fts_single_field_(node.arg, field)
         return f"NOT ({child_sql})", child_params
 
-    return f"CASEFOLD({column_sql}) = CASEFOLD(?)", [_coerce_text_scalar(node, field)]
+    if isinstance(node, Phrase):
+        sql = (
+            f"EXISTS ("
+            f"SELECT 1 FROM {_quote(FTS_TABLE_NAME)} "
+            f"WHERE {_quote(FTS_TABLE_NAME)}.rowid = "
+            f"{_quote(TABLE_NAME)}.{_quote(PRIMARY_KEY)} "
+            f"AND {_quote(FTS_TABLE_NAME)} MATCH ?"
+            f")"
+        )
+        return sql, [f'{field}:{_quote(node.value)}']
+    
+    raise SQLCompileError(f"Unsupported full-text search expression: {node!r}")
+
+
+def _compile_exact_expr(node: Any, column_sql: str, field: str) -> tuple[str, list[Any]]:
+    if isinstance(node, And):
+        raise SQLCompileError(f"Operator '=' (exact match) does not support AND expressions. Use ':' (contains) instead.")
+
+    if isinstance(node, Or):
+        parts, params = [], []
+        for child in node.args:
+            child_sql, child_params = _compile_exact_expr(child, column_sql, field)
+            parts.append(f"({child_sql})")
+            params.extend(child_params)
+        return " OR ".join(parts), params
+
+    if isinstance(node, Not):
+        child_sql, child_params = _compile_exact_expr(node.arg, column_sql, field)
+        return f"NOT ({child_sql})", child_params
+
+    if isinstance(node, Phrase):
+        if field in TEXT_FIELDS:
+            return f"CASEFOLD({column_sql}) = CASEFOLD(?)", [node.value]
+        elif field in NUMERIC_FIELDS:
+            return f"{column_sql} = ?", [_coerce_numeric(node, field)]
+        elif field in DATE_FIELDS:
+            return f"{column_sql} = ?", [_coerce_date(node, field)]
+    
+    raise SQLCompileError(f"Unsupported exact-match expression: {node!r}")
+
 
 def _ensure_scalar_rhs(value: Any, field: str, op: str) -> Any:
     if isinstance(value, (And, Or, Not)):
@@ -338,42 +288,37 @@ def _compile_node(node: Any) -> tuple[str, list[Any]]:
 
         if field not in ALL_QUERY_FIELDS:
             raise SQLCompileError(f"Unknown field: {field!r}")
+        
+        column_sql = f'{_quote(TABLE_NAME)}.{_quote(field)}'
 
-        if _is_text_field(field):
-            column_sql = f'{_quote_identifier(TABLE_NAME)}.{_quote_identifier(field)}'
-
+        if field in TEXT_FIELDS:
             if op == ":":
-                match_expr = _compile_text_match_expr(value, field)
-                sql = (
-                    f"EXISTS ("
-                    f"SELECT 1 FROM {_quote_identifier(FTS_TABLE_NAME)} "
-                    f"WHERE {_quote_identifier(FTS_TABLE_NAME)}.rowid = "
-                    f"{_quote_identifier(TABLE_NAME)}.{_quote_identifier(PRIMARY_KEY)} "
-                    f"AND {_quote_identifier(FTS_TABLE_NAME)} MATCH ?"
-                    f")"
-                )
-                return sql, [match_expr]
-
+                return _compile_fts_single_field_(value, field)
+    
             if op == "=":
-                return _compile_text_exact_expr(value, column_sql, field)
+                return _compile_exact_expr(value, column_sql, field)
 
             raise SQLCompileError(f"Operator {op!r} is invalid for text field {field!r}. Use ':' or '='.")
 
-        column = _column_for_field(field)
-
-        if _is_numeric_field(field):
+        if field in NUMERIC_FIELDS:
             if op not in ("=", ">", ">=", "<", "<="):
-                raise SQLCompileError(f"Operator {op!r} is invalid for numeric field {field!r}")
+                raise SQLCompileError(f"Operator {op!r} is invalid for numeric field {field!r}. Use '=', '>', '>=', '<', or '<='.")
+            
+            if op == "=":
+                return _compile_exact_expr(value, column_sql, field)
+            
             value = _ensure_scalar_rhs(value, field, op)
-            return f'{_quote_identifier(TABLE_NAME)}.{_quote_identifier(column)} {op} ?', [_coerce_numeric(value, field)]
+            return f'{column_sql} {op} ?', [_coerce_numeric(value, field)]
 
-        if _is_date_field(field):
+        if field in DATE_FIELDS:
             if op not in ("=", ">", ">=", "<", "<="):
-                raise SQLCompileError(f"Operator {op!r} is invalid for date field {field!r}")
+                raise SQLCompileError(f"Operator {op!r} is invalid for date field {field!r}. Use '=', '>', '>=', '<', or '<='.")
+            
+            if op == "=":
+                return _compile_exact_expr(value, column_sql, field) 
+            
             value = _ensure_scalar_rhs(value, field, op)
-            return f'{_quote_identifier(TABLE_NAME)}.{_quote_identifier(column)} {op} ?', [_coerce_date(value, field)]
-
-        raise SQLCompileError(f"Unknown field: {field!r}")
+            return f'{column_sql} {op} ?', [_coerce_date(value, field)]
 
     if isinstance(node, And):
         parts, params = [], []
@@ -401,10 +346,10 @@ def _compile_node(node: Any) -> tuple[str, list[Any]]:
 def compile_ast_to_sql(ast: Any) -> tuple[str, list[Any]]:
     where_sql, params = _compile_node(ast)
     sql = f"""
-SELECT {_quote_identifier(TABLE_NAME)}.*
-FROM {_quote_identifier(TABLE_NAME)}
-WHERE {where_sql}
-""".strip()
+    SELECT {_quote(TABLE_NAME)}.*
+    FROM {_quote(TABLE_NAME)}
+    WHERE {where_sql}
+    """.strip()
     return sql, params
 
 
@@ -417,17 +362,16 @@ if __name__ == "__main__":
     conn.create_function("CASEFOLD", 1, _unicode_casefold)
     cursor = conn.cursor()
 
-    query = '(bid_name: quảng ngãi OR dịch vụ) AND (location: hà nội OR thanh hoá) AND (quantity > 100) AND (unit = "bơm tiêm" OR "lọ")'
+    query = '(bid_name: quảng ngãi OR dịch vụ) AND (location: hà nội AND (NOT thanh hoá)) AND (quantity > 100) AND (unit = "bơm tiêm" OR "lọ")'
 
     sql, params = compile_query_to_sql(query)
 
-    cursor.execute(sql, params)
+    print(sql)
+    print(params)
 
     df = pd.read_sql_query(sql, conn, params=params)
 
     df.to_excel("test.xlsx", index=False)
 
     conn.close()
-
-
 
