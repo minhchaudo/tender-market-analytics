@@ -170,15 +170,13 @@ with content:
                         ).configure_view(stroke=None), width="stretch")
 
                 with st.container():
-                    st.markdown("**Distribution of unit prices**")
+                    st.markdown("**Unit price by contractor**")
 
-                    # l = df["Đơn giá trúng thầu"].quantile(0.05)
-                    # h = df["Đơn giá trúng thầu"].quantile(0.95)
-                    # chart_df = df[df["Đơn giá trúng thầu"].between(l, h)]
-
-                    st.altair_chart(alt.Chart(df).mark_bar().encode(
+                    top_bidder = set(df.groupby("Nhà thầu trúng thầu", as_index=False)["Thành tiền"].sum().sort_values(by="Thành tiền", ascending=False).head(10)["Nhà thầu trúng thầu"])
+                    data = df[df["Nhà thầu trúng thầu"].isin(top_bidder)]
+                    st.altair_chart(alt.Chart(data).mark_boxplot().encode(
                             x=alt.X("Đơn giá trúng thầu", title="Đơn giá trúng thầu"),
-                            y=alt.Y("count()", title="Count")
+                            y=alt.Y("Nhà thầu trúng thầu", sort=alt.EncodingSortField(field="Đơn giá trúng thầu", op="median", order="descending"), axis=alt.Axis(labelLimit=500), title=None)
                         ).configure_view(stroke=None), width="stretch")
 
                 with st.container():
