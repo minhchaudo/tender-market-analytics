@@ -2,6 +2,7 @@ import streamlit as st
 import altair as alt
 import pandas as pd
 from datetime import datetime
+import numpy as np
 
 def query_db(query: str):
     print(query)
@@ -131,10 +132,36 @@ with right_col:
                     with st.container():
                         st.subheader("**Distribution of unit prices**")
 
-                        st.altair_chart(alt.Chart(df).mark_bar().encode(
-                                x=alt.X(colnames.unit_price, title="Unit price (million VND)", axis=alt.Axis(labelExpr="datum.value / 1e6"), scale=alt.Scale(domainMin=0)),
-                                y=alt.Y("count()", title="Count")
-                            ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
+                        s = df[colnames.unit_price]
+                        bins = 100
+                        counts, _ = np.histogram(s, bins=bins)
+                        stats_df = pd.DataFrame([{
+                            "x0": 0, "x1": float(s.max()), "y0": 0, "y1": int(counts.max()) if counts.size else 0,
+                            "mean": s.mean(), "std": s.std(), "q1": s.quantile(0.25), "q3": s.quantile(0.75),
+                        }])
+
+                        bars = alt.Chart(df).mark_bar().encode(
+                            x=alt.X(colnames.unit_price, bin=alt.Bin(maxbins=bins), title="Unit price (million VND)",
+                                    axis=alt.Axis(labelExpr="datum.value / 1e6"), scale=alt.Scale(domainMin=0)),
+                            y=alt.Y("count()", title="Count"),
+                        )
+
+                        hover = alt.Chart(stats_df).mark_rect(opacity=0).encode(
+                            x="x0", x2="x1", y="y0", y2="y1",
+                            tooltip=[
+                                alt.Tooltip("mean", title="Mean", format=",.2f"),
+                                alt.Tooltip("std", title="Standard deviation", format=",.2f"),
+                                alt.Tooltip("q1", title="Q1", format=",.2f"),
+                                alt.Tooltip("q3", title="Q3", format=",.2f"),
+                            ],
+                        )
+
+                        st.altair_chart(
+                            (bars + hover).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(
+                                labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16
+                            ),
+                            width="stretch",
+                        )
                     with st.container():
                         st.subheader("**Top contractors**")
 
@@ -219,6 +246,7 @@ with right_col:
             else:
                 with st.form("Parameters"):
                     st.subheader("Parameters for the prediction")
+                    banner = st.container()
                     left_col, right_col = st.columns([1, 1], gap="large")
                     with left_col:
                         st.selectbox(colnames.investor, sorted(set(st.session_state["data"][colnames.investor]) | {"Other"}), index=None, key=f"Predict: {colnames.investor}")
@@ -233,4 +261,8 @@ with right_col:
                         st.selectbox("Country of origin", sorted(set(st.session_state["data"][colnames.origin]) | {"Other"}), index=None, key=f"Predict: {colnames.origin}")
                     _, button_space, _ = st.columns([1, 1, 1], gap="large")
                     with button_space:
-                        st.form_submit_button("Search", on_click=handle_search_click, width="stretch")
+                        if st.form_submit_button("Search", width="stretch"):
+                            filled = (st.session_state[f"Predict: {colnames.investor}"] is not None) and (st.session_state[f"Predict: {colnames.province}"] is not None) and (st.session_state[f"Predict: {colnames.manufacturer}"] is not None) and (st.session_state[f"Predict: {colnames.origin}"] is not None)
+                            if not filled:
+                                with banner:
+                                    st.error("Please fill all the required fields!")
