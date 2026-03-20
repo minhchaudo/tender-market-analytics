@@ -113,10 +113,10 @@ with right_col:
                     st.info("No result. Try adjusting your filters.")
                 else:
                     with st.container():
-                        st.subheader("**Distribution of bid prices**")
+                        st.subheader("**Distribution of unit prices**")
 
                         st.altair_chart(alt.Chart(df).mark_bar().encode(
-                                x=alt.X("Thành tiền", title="Thành tiền (tỷ đồng)", axis=alt.Axis(labelExpr="datum.value / 1e9")),
+                                x=alt.X("Đơn giá trúng thầu", title="Đơn giá trúng thầu (triệu đồng)", axis=alt.Axis(labelExpr="datum.value / 1e6"), scale=alt.Scale(domainMin=0)),
                                 y=alt.Y("count()", title="Count")
                             ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
                     with st.container():
@@ -162,4 +162,25 @@ with right_col:
                             ]), width="stretch")
     with tab2:
         with st.container(height=600, border=True):
-            st.info("Prediction is being implemented.")
+            if not "data" in st.session_state:
+                st.info("Query something before predicting.")
+            elif st.session_state["data"].empty:
+                st.info("No result. Try another query before predicting.")
+            else:
+                with st.form("Parameters"):
+                    st.subheader("Parameters for the prediction")
+                    left_col, right_col = st.columns([1, 1], gap="large")
+                    with left_col:
+                        st.selectbox("Investor", sorted(set(st.session_state["data"]["Chủ đầu tư"]) | {"Other"}), index=None, key="Predict: investor")
+                        st.selectbox("Province", sorted(set(st.session_state["data"]["Địa điểm"]) | {"Other"}), index=None, key="Predict: province")
+                        inner_left_col, inner_right_col = st.columns([1, 1], gap="medium")
+                        with inner_left_col:
+                            st.number_input("Quantity", key="Predict: quantity", min_value=1)
+                        with inner_right_col:
+                            st.date_input("Bidding date", key="Predict: date")
+                    with right_col:
+                        st.selectbox("Manufacturer", sorted(set(st.session_state["data"]["Nhà sản xuất"]) | {"Other"}), index=None, key="Predict: manufacturer")
+                        st.selectbox("Country of origin", sorted(set(st.session_state["data"]["Xuất xứ"]) | {"Other"}), index=None, key="Predict: origin")
+                    _, button_space, _ = st.columns([1, 1, 1], gap="large")
+                    with button_space:
+                        st.form_submit_button("Search", on_click=handle_search_click, width="stretch")
