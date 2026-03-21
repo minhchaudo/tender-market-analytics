@@ -357,21 +357,18 @@ def compile_query_to_sql(query: str) -> tuple[str, list[Any]]:
     return compile_ast_to_sql(parse_query(query))
 
 
-if __name__ == "__main__":
+def query(query: str):
     conn = sqlite3.connect("products.db")
     conn.create_function("CASEFOLD", 1, _unicode_casefold)
     cursor = conn.cursor()
 
-    query = '(bid_name: quảng ngãi OR dịch vụ) AND (location: hà nội AND (NOT thanh hoá)) AND (quantity > 100) AND (unit = "bơm tiêm" OR "lọ")'
-
     sql, params = compile_query_to_sql(query)
 
-    print(sql)
-    print(params)
+    # print(sql)
+    # print(params)
 
     df = pd.read_sql_query(sql, conn, params=params)
 
-    df.to_excel("test.xlsx", index=False)
-
     conn.close()
 
+    return df

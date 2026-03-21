@@ -3,10 +3,11 @@ import altair as alt
 import pandas as pd
 from datetime import datetime
 import numpy as np
+from query_logic import query, SQLCompileError
 
-def query_db(query: str):
-    print(query)
-    return pd.read_csv("kit_test_df_clean.csv")
+# def query_db(query: str):
+#     print(query)
+#     return pd.read_csv("kit_test_df_clean.csv")
 
 class colnames:
     contractor_name = "contractor_name"
@@ -31,7 +32,17 @@ class colnames:
     province = "province"
 
 def handle_search_click():
-    df = query_db(st.session_state["text: query"]).dropna()
+    query_str = st.session_state["text: query"].strip()
+    if query_str == "":
+        st.session_state["query_error"] = 1
+        return
+    else:
+        try:
+            df = query(query_str).dropna()
+        except Exception as e:
+            st.session_state["query_error"] = e
+            return
+    st.session_state["query_error"] = None
     df[colnames.posting_date] = pd.to_datetime(df[colnames.posting_date], format="%d-%m-%Y %H:%M")
     df[colnames.closing_date] = pd.to_datetime(df[colnames.closing_date], format="%d-%m-%Y %H:%M")
 
@@ -85,6 +96,13 @@ left_col, right_col = st.columns([2, 8], gap="large")
 with left_col:
     with st.container(height=650, border=True):
         with st.form("Query", border=False):
+            if "query_error" in st.session_state and st.session_state["query_error"] != None:
+                if st.session_state["query_error"] == 1:
+                    st.error("Please enter your query first!")
+                elif isinstance(st.session_state["query_error"], SQLCompileError):
+                    st.error(str(st.session_state["query_error"]))
+                else:
+                    st.error("Unknown error occured! Please check your query and try again.")
             st.text_area("Search query", height=100, key="text: query")
             st.form_submit_button("Search", on_click=handle_search_click, width="stretch")
         if "data" in st.session_state and not st.session_state["data"].empty:
