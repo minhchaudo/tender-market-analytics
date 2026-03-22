@@ -43,8 +43,8 @@ def handle_search_click():
             st.session_state["query_error"] = e
             return
     st.session_state["query_error"] = None
-    df[colnames.posting_date] = pd.to_datetime(df[colnames.posting_date], format="%d-%m-%Y %H:%M")
-    df[colnames.closing_date] = pd.to_datetime(df[colnames.closing_date], format="%d-%m-%Y %H:%M")
+    df[colnames.posting_date] = pd.to_datetime(df[colnames.posting_date], format="%Y-%m-%d %H:%M:%S")
+    df[colnames.closing_date] = pd.to_datetime(df[colnames.closing_date], format="%Y-%m-%d %H:%M:%S")
 
     st.session_state["data"] = df
     st.session_state[f"Filter: {colnames.investor}"] = set()
@@ -102,7 +102,8 @@ with left_col:
                 elif isinstance(st.session_state["query_error"], SQLCompileError):
                     st.error(str(st.session_state["query_error"]))
                 else:
-                    st.error("Unknown error occured! Please check your query and try again.")
+                    st.error(str(st.session_state["query_error"]))
+                    # st.error("Unknown error occured! Please check your query and try again.")
             st.text_area("Search query", height=100, key="text: query")
             st.form_submit_button("Search", on_click=handle_search_click, width="stretch")
         if "data" in st.session_state and not st.session_state["data"].empty:
@@ -155,7 +156,7 @@ with right_col:
                         counts, _ = np.histogram(s, bins=bins)
                         stats_df = pd.DataFrame([{
                             "x0": 0, "x1": float(s.max()), "y0": 0, "y1": int(counts.max()) if counts.size else 0,
-                            "mean": s.mean(), "std": s.std(), "q1": s.quantile(0.25), "q3": s.quantile(0.75),
+                            "mean": s.mean(), "std": s.std(), "min": s.min(), "q1": s.quantile(0.25), "q3": s.quantile(0.75), "max": s.max()
                         }])
 
                         bars = alt.Chart(df).mark_bar().encode(
@@ -169,8 +170,10 @@ with right_col:
                             tooltip=[
                                 alt.Tooltip("mean", title="Mean", format=",.2f"),
                                 alt.Tooltip("std", title="Standard deviation", format=",.2f"),
+                                alt.Tooltip("min", title="Min", format=",.2f"),
                                 alt.Tooltip("q1", title="Q1", format=",.2f"),
                                 alt.Tooltip("q3", title="Q3", format=",.2f"),
+                                alt.Tooltip("max", title="Max", format=",.2f")
                             ],
                         )
 

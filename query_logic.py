@@ -364,8 +364,8 @@ def query(query: str):
 
     sql, params = compile_query_to_sql(query)
 
-    # print(sql)
-    # print(params)
+    print(sql)
+    print(params)
 
     df = pd.read_sql_query(sql, conn, params=params)
 

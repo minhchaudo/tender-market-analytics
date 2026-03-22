@@ -1,51 +1,29 @@
 import pandas as pd
 import sqlite3
 
-excel_path = "Market_survey.xlsx"
+csv_path = "kit_test_df_clean.csv"
 sqlite_path = "products.db"
 table_name = "products"
 fts_table = "products_fts"
 
-COLUMN_MAP = {
-    "Tên gói thầu": "bid_name",
-    "Chủ đầu tư": "investor",
-    "Địa điểm": "location",
-    "Nhà thầu trúng thầu": "winner",
-    "Tên hàng hoá": "item_name",
-    "Mặt hàng": "category",
-    "Nhà sản xuất": "manufacturer",
-    "Xuất xứ": "origin",
-    "Đơn vị": "unit",
-    "Số lượng": "quantity",
-    "Đơn giá trúng thầu": "unit_price",
-    "Thành tiền": "total_price",
-    "Thời điểm đăng tải": "posting_time",
-    "Thời điểm đóng thầu": "closing_time",
-}
+df = pd.read_csv(csv_path)
+COLUMNS = df.columns
 
-NUMERIC_SOURCE_FIELDS = {"Số lượng", "Đơn giá trúng thầu", "Thành tiền"}
-DATE_SOURCE_FIELDS = {"Thời điểm đăng tải", "Thời điểm đóng thầu"}
-TEXT_SOURCE_FIELDS = [col for col in COLUMN_MAP if col not in NUMERIC_SOURCE_FIELDS | DATE_SOURCE_FIELDS]
+NUMERIC_FIELDS = {"quantity", "unit_price", "total_price"}
+DATE_FIELDS = {"posting_date", "closing_date"}
+TEXT_FIELDS = {col for col in COLUMNS if col not in NUMERIC_FIELDS | DATE_FIELDS}
 
-df = pd.read_excel(excel_path)
+# df = df.rename(columns=COLUMN_MAP)
 
-df = df.rename(columns=COLUMN_MAP)
-
-for src_col in NUMERIC_SOURCE_FIELDS:
-    col = COLUMN_MAP[src_col]
+for col in NUMERIC_FIELDS:
     df[col] = pd.to_numeric(df[col], errors="coerce")
 
-for src_col in DATE_SOURCE_FIELDS:
-    col = COLUMN_MAP[src_col]
+for col in DATE_FIELDS:
     dt = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
     df[col] = dt.dt.normalize().dt.strftime("%Y-%m-%d %H:%M:%S")
     df[col] = df[col].where(dt.notna(), None)
 
 df.insert(0, "id", range(1, len(df) + 1))
-
-NUMERIC_FIELDS = [COLUMN_MAP[col] for col in NUMERIC_SOURCE_FIELDS]
-DATE_FIELDS = [COLUMN_MAP[col] for col in DATE_SOURCE_FIELDS]
-TEXT_FIELDS = [COLUMN_MAP[col] for col in TEXT_SOURCE_FIELDS]
 
 conn = sqlite3.connect(sqlite_path)
 cur = conn.cursor()
@@ -58,7 +36,7 @@ cur.execute(f'DROP TRIGGER IF EXISTS "{table_name}_au"')
 
 df.to_sql(table_name, conn, if_exists="replace", index=False)
 
-for col in NUMERIC_FIELDS + DATE_FIELDS:
+for col in NUMERIC_FIELDS | DATE_FIELDS:
     cur.execute(
         f'CREATE INDEX IF NOT EXISTS "idx_{table_name}_{col}" '
         f'ON "{table_name}"("{col}")'
