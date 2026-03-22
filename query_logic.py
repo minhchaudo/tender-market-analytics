@@ -68,15 +68,15 @@ FTS_TABLE_NAME = "products_fts"
 PRIMARY_KEY = "id"
 
 TEXT_FIELDS = {
-    "bid_name",
-    "investor",
-    "location",
-    "winner",
-    "item_name",
-    "category",
-    "manufacturer",
-    "origin",
+    "contractor_name",
+    "product",
     "unit",
+    "bid_package_name",
+    "investor",
+    "manufacturer",
+    "country_of_origin",
+    "region_of_origin",
+    "province"
 }
 
 NUMERIC_FIELDS = {
