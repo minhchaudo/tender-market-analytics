@@ -38,7 +38,7 @@ for src_col in NUMERIC_SOURCE_FIELDS:
 for src_col in DATE_SOURCE_FIELDS:
     col = COLUMN_MAP[src_col]
     dt = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
-    df[col] = dt.dt.strftime("%Y-%m-%d %H:%M:%S")
+    df[col] = dt.dt.normalize().dt.strftime("%Y-%m-%d %H:%M:%S")
     df[col] = df[col].where(dt.notna(), None)
 
 df.insert(0, "id", range(1, len(df) + 1))
