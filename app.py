@@ -40,7 +40,7 @@ def handle_search_click():
         return
     else:
         try:
-            df = query(query_str).dropna()
+            df = query(query_str)
         except Exception as e:
             st.session_state["query_error"] = e
             return
@@ -57,20 +57,22 @@ def handle_search_click():
     st.session_state[f"Filter: {colnames.quantity}"] = (df[colnames.quantity].min(), df[colnames.quantity].max())
     st.session_state[f"Filter: {colnames.unit_price}"] = (df[colnames.unit_price].min(), df[colnames.unit_price].max())
     st.session_state[f"Filter: {colnames.total_price}"] = (df[colnames.total_price].min(), df[colnames.total_price].max())
-    st.session_state[f"Filter: {colnames.posting_date}"] = (df[colnames.posting_date].min(), df[colnames.posting_date].max())
-    st.session_state[f"Filter: {colnames.closing_date}"] = (df[colnames.closing_date].min(), df[colnames.closing_date].max())
+    st.session_state[f"Filter: min {colnames.posting_date}"] = df[colnames.posting_date].min()
+    st.session_state[f"Filter: max {colnames.posting_date}"] = df[colnames.posting_date].max()
+    st.session_state[f"Filter: min {colnames.closing_date}"] = df[colnames.closing_date].min()
+    st.session_state[f"Filter: max {colnames.closing_date}"] = df[colnames.closing_date].max()
 
 def generate_label_filter(cname: str):
-    label_col, button_col = st.columns([5, 1], gap="small", vertical_alignment="center")
+    label_col, button_col = st.columns([5, 1], gap="xxlarge", vertical_alignment="center")
     with label_col:
-        st.markdown(f"**filter {cname.replace("_", " ")}**")
+        st.markdown(f"**Filter {cname.replace("_", " ")}**")
     with button_col:
         st.button("🗑️", key=f"button: erase {cname}", help="Clear this filter", on_click=lambda: st.session_state[f"Filter: {cname}"].clear(), type="tertiary", use_container_width=True)
     
     def handle_selectbox_change():
         st.session_state[f"Filter: {cname}"].add(st.session_state[f"selectbox: {cname}"])
         st.session_state[f"selectbox: {cname}"] = None
-    st.selectbox(f"Filter {cname.replace("_", " ")}", sorted(set(st.session_state["data"][cname])), key=f"selectbox: {cname}", index=None, placeholder=f"Select {cname} to filter", label_visibility="collapsed", on_change=handle_selectbox_change)
+    st.selectbox(f"Filter {cname.replace("_", " ")}", sorted(set(st.session_state["data"][cname])), key=f"selectbox: {cname}", index=None, placeholder=f"Select {cname.replace("_", " ")} to filter", label_visibility="collapsed", on_change=handle_selectbox_change)
 
     st.pills("Current filters", sorted({"❌ " + s for s in st.session_state[f"Filter: {cname}"]}), key=f"pills: {cname}", label_visibility="collapsed", on_change=lambda: st.session_state[f"Filter: {cname}"].discard(st.session_state[f"pills: {cname}"][2:]))
 
@@ -85,21 +87,26 @@ def generate_checkboxes(cname: str):
 
 def generate_slider(cname: str):
     df = st.session_state["data"]
-    
-    st.slider(f"{cname.replace("_", " ")}", min_value=df[cname].min(), max_value=df[cname].max(), key=f"Filter: {cname}")
+
+    st.slider(f"{cname.replace("_", " ").capitalize()}", min_value=df[cname].min(), max_value=df[cname].max(), key=f"Filter: {cname}")
 
 def generate_date_range(cname: str):
     df = st.session_state["data"]
 
-    st.date_input(f"{cname.replace("_", " ")}", min_value=df[cname].min(), max_value=df[cname].max(), key=f"Filter: {cname}")
+    st.subheader(f"{cname.replace("_", " ").capitalize()}")
+    left_col, right_col = st.columns([1, 1], gap="small")
+    with left_col:
+        st.date_input("From", min_value=df[cname].min(), max_value=df[cname].max(), format="DD-MM-YYYY", key=f"Filter: min {cname}")
+    with right_col:
+        st.date_input("To", min_value=df[cname].min(), max_value=df[cname].max(), format="DD-MM-YYYY", key=f"Filter: max {cname}")
 
 st.set_page_config(page_title="Tender Market Analytics", layout="wide")
 st.title("Tender Market Analytics", text_alignment="center")
-left_col, right_col = st.columns([2, 8], gap="large")
+left_col, right_col = st.columns([3, 7], gap="large")
 with left_col:
     with st.container(height=650, border=True):
         with st.form("Query", border=False):
-            st.text_area("Search query", height=100, key="text: query")
+            st.text_area("Search query", height=200, key="text: query")
             if "query_error" in st.session_state and st.session_state["query_error"] != None:
                 if st.session_state["query_error"] == 1:
                     st.error("Please enter your query first!")
@@ -130,14 +137,10 @@ with right_col:
                 st.info("No result. Try another query.")
             else:
                 raw_df = st.session_state["data"]
-                try:
-                    s_post, e_post = st.session_state[f"Filter: {colnames.posting_date}"]
-                    s_bid, e_bid = st.session_state[f"Filter: {colnames.closing_date}"]
-                except Exception:
-                    s_post = st.session_state[f"Filter: {colnames.posting_date}"][0]
-                    e_post = datetime.now()
-                    s_bid = st.session_state[f"Filter: {colnames.closing_date}"][0]
-                    e_bid = datetime.now()
+                s_post = st.session_state[f"Filter: min {colnames.posting_date}"] if st.session_state[f"Filter: min {colnames.posting_date}"] != None else raw_df[colnames.posting_date].min()
+                e_post = st.session_state[f"Filter: max {colnames.posting_date}"] if st.session_state[f"Filter: max {colnames.posting_date}"] != None else raw_df[colnames.posting_date].max()
+                s_bid = st.session_state[f"Filter: min {colnames.closing_date}"] if st.session_state[f"Filter: min {colnames.closing_date}"] != None else raw_df[colnames.closing_date].min()
+                e_bid = st.session_state[f"Filter: max {colnames.closing_date}"] if st.session_state[f"Filter: max {colnames.closing_date}"] != None else raw_df[colnames.closing_date].max()
                 df = raw_df[
                     (raw_df[colnames.investor].isin(st.session_state[f"Filter: {colnames.investor}"]) if st.session_state[f"Filter: {colnames.investor}"] else True) &
                     (raw_df[colnames.contractor_name].isin(st.session_state[f"Filter: {colnames.contractor_name}"]) if st.session_state[f"Filter: {colnames.contractor_name}"] else True) &
@@ -147,49 +150,48 @@ with right_col:
                     (raw_df[colnames.quantity].between(*st.session_state[f"Filter: {colnames.quantity}"])) &
                     (raw_df[colnames.unit_price].between(*st.session_state[f"Filter: {colnames.unit_price}"])) &
                     (raw_df[colnames.total_price].between(*st.session_state[f"Filter: {colnames.total_price}"])) &
-                    (raw_df[colnames.posting_date].between(pd.Timestamp(s_post), pd.Timestamp(e_post) + pd.Timedelta(days=1))) &
-                    (raw_df[colnames.closing_date].between(pd.Timestamp(s_bid), pd.Timestamp(e_bid) + pd.Timedelta(days=1)))
+                    (raw_df[colnames.posting_date].between(pd.Timestamp(s_post), pd.Timestamp(e_post) + pd.Timedelta(seconds=1))) &
+                    (raw_df[colnames.closing_date].between(pd.Timestamp(s_bid), pd.Timestamp(e_bid) + pd.Timedelta(seconds=1)))
                 ]
                 if df.empty:
                     st.info("No result. Try adjusting your filters.")
                 else:
                     with st.container():
-                        st.subheader("**Distribution of unit prices**")
+                        st.subheader("Distribution of unit prices")
 
-                        s = df[colnames.unit_price]
                         bins = 100
-                        counts, _ = np.histogram(s, bins=bins)
-                        stats_df = pd.DataFrame([{
-                            "x0": 0, "x1": float(s.max()), "y0": 0, "y1": int(counts.max()) if counts.size else 0,
-                            "mean": s.mean(), "std": s.std(), "min": s.min(), "q1": s.quantile(0.25), "q3": s.quantile(0.75), "max": s.max()
-                        }])
-
                         bars = alt.Chart(df).mark_bar().encode(
-                            x=alt.X(colnames.unit_price, bin=alt.Bin(maxbins=bins), title="Unit price (million VND)",
-                                    axis=alt.Axis(labelExpr="datum.value / 1e6"), scale=alt.Scale(domainMin=0)),
-                            y=alt.Y("count()", title="Count"),
-                        )
-
-                        hover = alt.Chart(stats_df).mark_rect(opacity=0).encode(
-                            x="x0", x2="x1", y="y0", y2="y1",
+                            x=alt.X(colnames.unit_price, bin=alt.Bin(maxbins=bins), title="Unit price (million VND)", axis=alt.Axis(labelExpr="datum.value / 1e6"), scale=alt.Scale(domainMin=0)),
+                            y=alt.Y("count()", title="Count")
+                        )        
+                        background = bars.encode(
                             tooltip=[
-                                alt.Tooltip("mean", title="Mean", format=",.2f"),
-                                alt.Tooltip("std", title="Standard deviation", format=",.2f"),
-                                alt.Tooltip("min", title="Min", format=",.2f"),
-                                alt.Tooltip("q1", title="Q1", format=",.2f"),
-                                alt.Tooltip("q3", title="Q3", format=",.2f"),
-                                alt.Tooltip("max", title="Max", format=",.2f")
-                            ],
+                                alt.Tooltip('mean:N', title='Mean'),
+                                alt.Tooltip('std:N', title='Standard deviation'),
+                                alt.Tooltip('min:N', title='Min'),
+                                alt.Tooltip('q1:N', title='Q1'),
+                                alt.Tooltip('q3:N', title='Q3'),
+                                alt.Tooltip('max:N', title='Max')
+                            ]
+                        ).transform_calculate(
+                            mean=f"'{df[colnames.unit_price].mean():.0f} VND'",
+                            std=f"'{df[colnames.unit_price].std():.0f} VND'",
+                            min=f"'{df[colnames.unit_price].min():.0f} VND'",
+                            q1=f"'{df[colnames.unit_price].quantile(0.25):.0f} VND'",
+                            q3=f"'{df[colnames.unit_price].quantile(0.75):.0f} VND'",
+                            max=f"'{df[colnames.unit_price].max():.0f} VND'"
                         )
+                        bars = bars.add_params(alt.selection_point(on="mouseover", empty='none'))
+                        background = background.add_params(alt.selection_point(nearest=True))
 
                         st.altair_chart(
-                            (bars + hover).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(
+                            (background + bars).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(
                                 labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16
                             ),
                             width="stretch",
                         )
                     with st.container():
-                        st.subheader("**Top contractors**")
+                        st.subheader("Top contractors")
 
                         data = df.groupby(colnames.contractor_name, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(5)
                         st.altair_chart(alt.Chart(data).mark_bar().encode(
@@ -197,7 +199,7 @@ with right_col:
                                 y=alt.Y(colnames.contractor_name, sort="-x", axis=alt.Axis(labelLimit=400, labelOverlap=False), title=None)
                             ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
                     with st.container():
-                        st.subheader("**Top customers**")
+                        st.subheader("Top customers")
 
                         data = df.groupby(colnames.investor, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(5)
                         st.altair_chart(alt.Chart(data).mark_bar().encode(
@@ -205,7 +207,7 @@ with right_col:
                                 y=alt.Y(colnames.investor, sort="-x", axis=alt.Axis(labelLimit=400, labelOverlap=False), title=None)
                             ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
                     with st.container():
-                        st.subheader("**Unit price by contractor**")
+                        st.subheader("Unit price by contractor")
 
                         top_bidder = set(df.groupby(colnames.contractor_name, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(10)[colnames.contractor_name])
                         data = df[df[colnames.contractor_name].isin(top_bidder)]
@@ -214,7 +216,7 @@ with right_col:
                                 y=alt.Y(colnames.contractor_name, sort=alt.EncodingSortField(field=colnames.unit_price, op="median", order="descending"), axis=alt.Axis(labelLimit=400, labelOverlap=False), title=None)
                             ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
                     with st.container():
-                        st.subheader("**Unit price by origin**")
+                        st.subheader("Unit price by origin")
 
                         top_origin = set(df.groupby(colnames.country_origin, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(10)[colnames.country_origin])
                         data = df[df[colnames.country_origin].isin(top_origin)]
@@ -223,7 +225,7 @@ with right_col:
                                 y=alt.Y(colnames.country_origin, sort=alt.EncodingSortField(field=colnames.unit_price, op="median", order="descending"), axis=alt.Axis(labelLimit=400, labelOverlap=False), title=None)
                             ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
                     with st.container():
-                        st.subheader("**Unit price by manufacturer**")
+                        st.subheader("Unit price by manufacturer")
 
                         top_origin = set(df.groupby(colnames.manufacturer, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(10)[colnames.manufacturer])
                         data = df[df[colnames.manufacturer].isin(top_origin)]
@@ -232,7 +234,7 @@ with right_col:
                                 y=alt.Y(colnames.manufacturer, sort=alt.EncodingSortField(field=colnames.unit_price, op="median", order="descending"), axis=alt.Axis(labelLimit=400, labelOverlap=False), title=None)
                             ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
                     with st.container():
-                        st.subheader("**Total value by country of origin**")
+                        st.subheader("Total value by country of origin")
 
                         data_by_origin = df.groupby(colnames.country_origin, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False)
                         top9 = data_by_origin.head(9)
@@ -248,7 +250,7 @@ with right_col:
                                 alt.Tooltip(colnames.total_price, title="Total price", format=",.0f")
                             ]), width="stretch")
                     with st.container():
-                        st.subheader("**Total value by region of origin**")
+                        st.subheader("Total value by region of origin")
 
                         data_by_origin = df.groupby(colnames.region_origin, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False)
                         top9 = data_by_origin.head(9)
@@ -264,7 +266,7 @@ with right_col:
                                 alt.Tooltip(colnames.total_price, title="Total price", format=",.0f")
                             ]), width="stretch")
                     with st.container():
-                        st.subheader("**Total value by manufacturer**")
+                        st.subheader("Total value by manufacturer")
 
                         data_by_origin = df.groupby(colnames.manufacturer, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False)
                         top9 = data_by_origin.head(9)
