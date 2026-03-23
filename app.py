@@ -16,6 +16,8 @@ class colnames:
     product = "product"
     raw_manufacturer = "manufacturer_raw"
     raw_origin = "origin_raw"
+    country_origin = "country_of_origin"
+    region_origin = "region_of_origin"
     quantity = "quantity"
     unit = "unit"
     unit_price = "unit_price"
@@ -50,7 +52,8 @@ def handle_search_click():
     st.session_state[f"Filter: {colnames.investor}"] = set()
     st.session_state[f"Filter: {colnames.contractor_name}"] = set()
     st.session_state[f"Filter: {colnames.manufacturer}"] = set()
-    st.session_state[f"Filter: {colnames.origin}"] = set()
+    st.session_state[f"Filter: {colnames.country_origin}"] = set()
+    st.session_state[f"Filter: {colnames.region_origin}"] = set()
     st.session_state[f"Filter: {colnames.quantity}"] = (df[colnames.quantity].min(), df[colnames.quantity].max())
     st.session_state[f"Filter: {colnames.unit_price}"] = (df[colnames.unit_price].min(), df[colnames.unit_price].max())
     st.session_state[f"Filter: {colnames.total_price}"] = (df[colnames.total_price].min(), df[colnames.total_price].max())
@@ -60,14 +63,14 @@ def handle_search_click():
 def generate_label_filter(cname: str):
     label_col, button_col = st.columns([5, 1], gap="small", vertical_alignment="center")
     with label_col:
-        st.markdown(f"**Filter {cname}**")
+        st.markdown(f"**filter {cname.replace("_", " ")}**")
     with button_col:
         st.button("🗑️", key=f"button: erase {cname}", help="Clear this filter", on_click=lambda: st.session_state[f"Filter: {cname}"].clear(), type="tertiary", use_container_width=True)
     
     def handle_selectbox_change():
         st.session_state[f"Filter: {cname}"].add(st.session_state[f"selectbox: {cname}"])
         st.session_state[f"selectbox: {cname}"] = None
-    st.selectbox(f"Filter {cname}", sorted(set(st.session_state["data"][cname])), key=f"selectbox: {cname}", index=None, placeholder=f"Select {cname} to filter", label_visibility="collapsed", on_change=handle_selectbox_change)
+    st.selectbox(f"Filter {cname.replace("_", " ")}", sorted(set(st.session_state["data"][cname])), key=f"selectbox: {cname}", index=None, placeholder=f"Select {cname} to filter", label_visibility="collapsed", on_change=handle_selectbox_change)
 
     st.pills("Current filters", sorted({"❌ " + s for s in st.session_state[f"Filter: {cname}"]}), key=f"pills: {cname}", label_visibility="collapsed", on_change=lambda: st.session_state[f"Filter: {cname}"].discard(st.session_state[f"pills: {cname}"][2:]))
 
@@ -76,19 +79,19 @@ def generate_checkboxes(cname: str):
     df = st.session_state["data"]
     elems = set(df[cname])
 
-    st.markdown(f"**{cname}**")
+    st.markdown(f"**{cname.replace("_", " ")}**")
     for e in sorted(elems):
-        st.checkbox(e, key=f"checkbox: {cname}: {e}", value=e in st.session_state[f"Filter: {cname}"], on_change=lambda e=e: st.session_state[f"Filter: {cname}"].add(e) if st.session_state.get(f"checkbox: {cname}: {e}", False) else st.session_state[f"Filter: {cname}"].discard(e))
+        st.checkbox(e.replace("_", " "), key=f"checkbox: {cname}: {e}", value=e in st.session_state[f"Filter: {cname}"], on_change=lambda e=e: st.session_state[f"Filter: {cname}"].add(e) if st.session_state.get(f"checkbox: {cname}: {e}", False) else st.session_state[f"Filter: {cname}"].discard(e))
 
 def generate_slider(cname: str):
     df = st.session_state["data"]
     
-    st.slider(f"{cname}", min_value=df[cname].min(), max_value=df[cname].max(), key=f"Filter: {cname}")
+    st.slider(f"{cname.replace("_", " ")}", min_value=df[cname].min(), max_value=df[cname].max(), key=f"Filter: {cname}")
 
 def generate_date_range(cname: str):
     df = st.session_state["data"]
 
-    st.date_input(f"{cname}", min_value=df[cname].min(), max_value=df[cname].max(), key=f"Filter: {cname}")
+    st.date_input(f"{cname.replace("_", " ")}", min_value=df[cname].min(), max_value=df[cname].max(), key=f"Filter: {cname}")
 
 st.set_page_config(page_title="Tender Market Analytics", layout="wide")
 st.title("Tender Market Analytics", text_alignment="center")
@@ -96,6 +99,7 @@ left_col, right_col = st.columns([2, 8], gap="large")
 with left_col:
     with st.container(height=650, border=True):
         with st.form("Query", border=False):
+            st.text_area("Search query", height=100, key="text: query")
             if "query_error" in st.session_state and st.session_state["query_error"] != None:
                 if st.session_state["query_error"] == 1:
                     st.error("Please enter your query first!")
@@ -104,13 +108,13 @@ with left_col:
                 else:
                     st.error(str(st.session_state["query_error"]))
                     # st.error("Unknown error occured! Please check your query and try again.")
-            st.text_area("Search query", height=100, key="text: query")
             st.form_submit_button("Search", on_click=handle_search_click, width="stretch")
         if "data" in st.session_state and not st.session_state["data"].empty:
             generate_label_filter(colnames.investor)
             generate_label_filter(colnames.contractor_name)
             generate_label_filter(colnames.manufacturer)
-            generate_label_filter(colnames.origin)
+            generate_label_filter(colnames.country_origin)
+            generate_label_filter(colnames.region_origin)
             generate_slider(colnames.quantity)
             generate_slider(colnames.unit_price)
             generate_slider(colnames.total_price)
@@ -138,7 +142,8 @@ with right_col:
                     (raw_df[colnames.investor].isin(st.session_state[f"Filter: {colnames.investor}"]) if st.session_state[f"Filter: {colnames.investor}"] else True) &
                     (raw_df[colnames.contractor_name].isin(st.session_state[f"Filter: {colnames.contractor_name}"]) if st.session_state[f"Filter: {colnames.contractor_name}"] else True) &
                     (raw_df[colnames.manufacturer].isin(st.session_state[f"Filter: {colnames.manufacturer}"]) if st.session_state[f"Filter: {colnames.manufacturer}"] else True) &
-                    (raw_df[colnames.origin].isin(st.session_state[f"Filter: {colnames.origin}"]) if st.session_state[f"Filter: {colnames.origin}"] else True) &
+                    (raw_df[colnames.country_origin].isin(st.session_state[f"Filter: {colnames.country_origin}"]) if st.session_state[f"Filter: {colnames.country_origin}"] else True) &
+                    (raw_df[colnames.region_origin].isin(st.session_state[f"Filter: {colnames.region_origin}"]) if st.session_state[f"Filter: {colnames.region_origin}"] else True) &
                     (raw_df[colnames.quantity].between(*st.session_state[f"Filter: {colnames.quantity}"])) &
                     (raw_df[colnames.unit_price].between(*st.session_state[f"Filter: {colnames.unit_price}"])) &
                     (raw_df[colnames.total_price].between(*st.session_state[f"Filter: {colnames.total_price}"])) &
@@ -211,11 +216,11 @@ with right_col:
                     with st.container():
                         st.subheader("**Unit price by origin**")
 
-                        top_origin = set(df.groupby(colnames.origin, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(10)[colnames.origin])
-                        data = df[df[colnames.origin].isin(top_origin)]
+                        top_origin = set(df.groupby(colnames.country_origin, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(10)[colnames.country_origin])
+                        data = df[df[colnames.country_origin].isin(top_origin)]
                         st.altair_chart(alt.Chart(data).mark_boxplot().encode(
                                 x=alt.X(colnames.unit_price, title="Unit price (million VND)", axis=alt.Axis(labelExpr="datum.value / 1e6")),
-                                y=alt.Y(colnames.origin, sort=alt.EncodingSortField(field=colnames.unit_price, op="median", order="descending"), axis=alt.Axis(labelLimit=400, labelOverlap=False), title=None)
+                                y=alt.Y(colnames.country_origin, sort=alt.EncodingSortField(field=colnames.unit_price, op="median", order="descending"), axis=alt.Axis(labelLimit=400, labelOverlap=False), title=None)
                             ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
                     with st.container():
                         st.subheader("**Unit price by manufacturer**")
@@ -227,19 +232,35 @@ with right_col:
                                 y=alt.Y(colnames.manufacturer, sort=alt.EncodingSortField(field=colnames.unit_price, op="median", order="descending"), axis=alt.Axis(labelLimit=400, labelOverlap=False), title=None)
                             ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
                     with st.container():
-                        st.subheader("**Total value by origin**")
+                        st.subheader("**Total value by country of origin**")
 
-                        data_by_origin = df.groupby(colnames.origin, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False)
+                        data_by_origin = df.groupby(colnames.country_origin, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False)
                         top9 = data_by_origin.head(9)
                         rest = data_by_origin.iloc[9:][colnames.total_price].sum()
 
-                        data = pd.concat([top9, pd.DataFrame([{colnames.origin: "Others", colnames.total_price: rest}])], ignore_index=True) if rest > 0 else top9
+                        data = pd.concat([top9, pd.DataFrame([{colnames.country_origin: "Others", colnames.total_price: rest}])], ignore_index=True) if rest > 0 else top9
                         st.altair_chart(alt.Chart(data).mark_arc().encode(
                             theta=alt.Theta(colnames.total_price, title="Total price", sort="x"),
-                            color=alt.Color(colnames.origin, legend=alt.Legend(title=colnames.origin, labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16)),
+                            color=alt.Color(colnames.country_origin, legend=alt.Legend(title=colnames.country_origin, labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16)),
                             order=alt.Order(colnames.total_price, sort="ascending"),
                             tooltip=[
-                                alt.Tooltip(colnames.origin, title=colnames.origin),
+                                alt.Tooltip(colnames.country_origin, title=colnames.country_origin),
+                                alt.Tooltip(colnames.total_price, title="Total price", format=",.0f")
+                            ]), width="stretch")
+                    with st.container():
+                        st.subheader("**Total value by region of origin**")
+
+                        data_by_origin = df.groupby(colnames.region_origin, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False)
+                        top9 = data_by_origin.head(9)
+                        rest = data_by_origin.iloc[9:][colnames.total_price].sum()
+
+                        data = pd.concat([top9, pd.DataFrame([{colnames.region_origin: "Others", colnames.total_price: rest}])], ignore_index=True) if rest > 0 else top9
+                        st.altair_chart(alt.Chart(data).mark_arc().encode(
+                            theta=alt.Theta(colnames.total_price, title="Total price", sort="x"),
+                            color=alt.Color(colnames.region_origin, legend=alt.Legend(title=colnames.region_origin, labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16)),
+                            order=alt.Order(colnames.total_price, sort="ascending"),
+                            tooltip=[
+                                alt.Tooltip(colnames.region_origin, title=colnames.region_origin),
                                 alt.Tooltip(colnames.total_price, title="Total price", format=",.0f")
                             ]), width="stretch")
                     with st.container():
@@ -279,11 +300,11 @@ with right_col:
                             st.date_input("Bidding date", key=f"Predict: {colnames.posting_date}")
                     with right_col:
                         st.selectbox(colnames.manufacturer, sorted(set(st.session_state["data"][colnames.manufacturer]) | {"Other"}), index=None, key=f"Predict: {colnames.manufacturer}")
-                        st.selectbox("Country of origin", sorted(set(st.session_state["data"][colnames.origin]) | {"Other"}), index=None, key=f"Predict: {colnames.origin}")
+                        st.selectbox("Country of origin", sorted(set(st.session_state["data"][colnames.country_origin]) | {"Other"}), index=None, key=f"Predict: {colnames.country_origin}")
                     _, button_space, _ = st.columns([1, 1, 1], gap="large")
                     with button_space:
                         if st.form_submit_button("Search", width="stretch"):
-                            filled = (st.session_state[f"Predict: {colnames.investor}"] is not None) and (st.session_state[f"Predict: {colnames.province}"] is not None) and (st.session_state[f"Predict: {colnames.manufacturer}"] is not None) and (st.session_state[f"Predict: {colnames.origin}"] is not None)
+                            filled = (st.session_state[f"Predict: {colnames.investor}"] is not None) and (st.session_state[f"Predict: {colnames.province}"] is not None) and (st.session_state[f"Predict: {colnames.manufacturer}"] is not None) and (st.session_state[f"Predict: {colnames.country_origin}"] is not None)
                             if not filled:
                                 with banner:
                                     st.error("Please fill all the required fields!")
