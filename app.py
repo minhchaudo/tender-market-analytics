@@ -2,6 +2,7 @@ import streamlit as st
 import altair as alt
 import pandas as pd
 from query_logic import query, SQLCompileError
+from prob_modeling import train_model, predict
 
 
 class colnames:
@@ -66,6 +67,9 @@ def handle_search_click():
     st.session_state[f"Filter: max {colnames.posting_date}"] = df[colnames.posting_date].max()
     st.session_state[f"Filter: min {colnames.closing_date}"] = df[colnames.closing_date].min()
     st.session_state[f"Filter: max {colnames.closing_date}"] = df[colnames.closing_date].max()
+
+    st.session_state["model_default"] == None
+    st.session_state["model_auto"] == None
 
 
 def generate_label_filter(cname: str):
@@ -254,7 +258,7 @@ with right_col:
                     else:
                         df[colnames.unit_price] /= 1e9
                         unit_unit_price = "billion VND"
-                    
+
                     if df[colnames.total_price].max() < 1e3:
                         unit_total_price = "VND"
                     elif df[colnames.total_price].max() < 1e6:
@@ -646,17 +650,16 @@ with right_col:
             else:
                 with st.form("Parameters"):
                     st.subheader("Parameters for the prediction")
-                    banner = st.container()
                     left_col, right_col = st.columns([1, 1], gap="large")
                     with left_col:
                         st.selectbox(
-                            colnames.investor,
+                            colnames.investor.replace("_", " ").capitalize(),
                             sorted(set(st.session_state["data"][colnames.investor]) | {"Other"}),
                             index=None,
                             key=f"Predict: {colnames.investor}",
                         )
                         st.selectbox(
-                            "Province",
+                            colnames.province.replace("_", " ").capitalize(),
                             sorted(set(st.session_state["data"][colnames.province]) | {"Other"}),
                             index=None,
                             key=f"Predict: {colnames.province}",
@@ -664,29 +667,40 @@ with right_col:
                         inner_left_col, inner_right_col = st.columns([1, 1], gap="medium")
                         with inner_left_col:
                             st.number_input(
-                                colnames.quantity,
+                                colnames.quantity.replace("_", " ").capitalize(),
                                 key=f"Predict: {colnames.quantity}",
                                 min_value=1,
                             )
                         with inner_right_col:
-                            st.date_input("Bidding date", key=f"Predict: {colnames.posting_date}")
+                            st.date_input(colnames.closing_date.replace("_", " ").capitalize(), key=f"Predict: {colnames.closing_date}", format="DD-MM-YYYY")
                     with right_col:
                         st.selectbox(
-                            colnames.manufacturer,
+                            colnames.manufacturer.replace("_", " ").capitalize(),
                             sorted(set(st.session_state["data"][colnames.manufacturer]) | {"Other"}),
                             index=None,
                             key=f"Predict: {colnames.manufacturer}",
                         )
                         st.selectbox(
-                            "Country of origin",
+                            colnames.country_origin.replace("_", " ").capitalize(),
                             sorted(set(st.session_state["data"][colnames.country_origin]) | {"Other"}),
                             index=None,
                             key=f"Predict: {colnames.country_origin}",
                         )
-                    _, button_space, _ = st.columns([1, 1, 1], gap="large")
+                    banner = st.container()
+                    _, class_space, button_space, _ = st.columns([2, 1, 2, 3], gap="small", vertical_alignment="bottom")
+                    with class_space:
+                        st.selectbox("Model class", ["Default", "Auto"], key=f"Predict: model_class")
                     with button_space:
-                        if st.form_submit_button("Search", width="stretch"):
-                            filled = (st.session_state[f"Predict: {colnames.investor}"] is not None) and (st.session_state[f"Predict: {colnames.province}"] is not None) and (st.session_state[f"Predict: {colnames.manufacturer}"] is not None) and (st.session_state[f"Predict: {colnames.country_origin}"] is not None)
+                        if st.form_submit_button("Train & predict", width="stretch"):
+                            filled = (st.session_state[f"Predict: {colnames.investor}"] is not None) and (st.session_state[f"Predict: {colnames.province}"] is not None) and (st.session_state[f"Predict: {colnames.quantity}"] is not None) and (st.session_state[f"Predict: {colnames.closing_date}"] is not None) and (st.session_state[f"Predict: {colnames.manufacturer}"] is not None) and (st.session_state[f"Predict: {colnames.country_origin}"] is not None) and (st.session_state[f"Predict: model_class"] is not None)
                             if not filled:
                                 with banner:
                                     st.error("Please fill all the required fields!")
+                            else:
+                                if st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"] == None:
+                                    model, _, _ = train_model(st.session_state["data"], st.session_state["Predict: model_class"].lower())
+                                    st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"] = model
+                                else:
+                                    model = st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"]
+                                dist = predict({colnames.investor: st.session_state[f"Predict: {colnames.investor}"], colnames.province: st.session_state[f"Predict: {colnames.province}"], colnames.quantity: st.session_state[f"Predict: {colnames.quantity}"], colnames.closing_date: st.session_state[f"Predict: {colnames.closing_date}"], colnames.manufacturer: st.session_state[f"Predict: {colnames.manufacturer}"], colnames.country_origin: st.session_state[f"Predict: {colnames.country_origin}"]}, model)
+                                
