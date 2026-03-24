@@ -20,6 +20,7 @@ import copy
 from sklearn.model_selection import ParameterSampler
 from itertools import combinations
 import warnings
+from scipy.stats import norm
 
 warnings.filterwarnings(
     "ignore",
@@ -38,7 +39,7 @@ FEATURES = [
 
 CAT_FEATURES = ["investor", "manufacturer", "country_of_origin", "province"]
 NUM_FEATURES = ["log_quantity", "year", "month"]
-TARGET = "unit_price"
+TARGET = "log_unit_price"
 DATE_COL = "closing_date"
 
 RF_PARAM_GRID = {
@@ -75,7 +76,7 @@ random.seed(RANDOM_STATE)
 class HierMeanFeatureSet:
     def __init__(
         self,
-        target_col="unit_price",
+        target_col=TARGET,
         fields=None,
         weights=None,
     ):
@@ -440,6 +441,18 @@ def get_cv_fn(target, features, n_splits=3):
             yield X_train_tr, y_train, X_test_tr, y_test, test_idx
     return hiermean_cv
 
+
+def prep_df(df, predict=False):
+    df = df.copy()
+    df["log_quantity"] = np.log(df["quantity"])
+    df["closing_date"] = pd.to_datetime(df["closing_date"], dayfirst=True)
+    df["month"] = df["closing_date"].dt.month
+    df["year"] = df["closing_date"].dt.year
+    if not predict:
+        df["log_unit_price"] = np.log(df["unit_price"] / 1000)
+    return df
+
+
 def get_train_val_test_split(df):
     df_model = df[FEATURES + [TARGET, DATE_COL]].copy()
     df_model = df_model.dropna(subset=[TARGET, DATE_COL] + FEATURES)
@@ -464,12 +477,33 @@ def get_pipeline_wrap(preprocessor, model_class):
     return get_pipeline
 
 
-def regression_metrics(y_true, y_pred):
+def regression_metrics(y_true, y_pred_median, y_pred_mean=None):
+    if y_pred_mean is None:
+        return {
+            "MAE": mean_absolute_error(y_true, y_pred_median),
+        }
     return {
-        "MAE": mean_absolute_error(y_true, y_pred),
-        "RMSE": np.sqrt(mean_squared_error(y_true, y_pred)),
-        "R2": r2_score(y_true, y_pred),
+        "MAE": mean_absolute_error(y_true, y_pred_median),
+        "RMSE": np.sqrt(mean_squared_error(y_true, y_pred_mean)),
+        "R2": r2_score(y_true, y_pred_mean),
     }
+
+def lognormal_coverage(y_true_log, mu_log, sigma_log, alpha=0.9):
+    y_true_log = np.asarray(y_true_log).reshape(-1)
+    mu_log = np.asarray(mu_log).reshape(-1)
+    sigma_log = np.asarray(sigma_log).reshape(-1)
+
+    z = norm.ppf((1 + alpha) / 2)
+
+    lower_log = mu_log - z * sigma_log
+    upper_log = mu_log + z * sigma_log
+
+    return np.mean((y_true_log >= lower_log) & (y_true_log <= upper_log))
+
+def revert_log_price(mu_log, sigma_log):
+    median_pred = np.exp(mu_log)
+    mean_pred   = np.exp(mu_log + 0.5 * sigma_log**2)
+    return median_pred, mean_pred
 
 def train_mean_model(
     train_df, val_df, test_df,
@@ -492,7 +526,7 @@ def train_mean_model(
     X_train, y_train = train_df_tr[features], train_df_tr[target]
     X_val, y_val = val_df_tr[features], val_df_tr[target]
 
-    best_val_rmse = np.inf
+    best_val_mae = np.inf
     best_mean_params = None
 
     for mean_params in tqdm(list(param_sampler)):
@@ -502,12 +536,12 @@ def train_mean_model(
         reg.fit(X_train, y_train)
 
         val_pred = reg.predict(X_val)
-        val_metrics = regression_metrics(y_val, val_pred)
-        val_rmse = val_metrics["RMSE"]
+        val_metrics = regression_metrics(np.exp(y_val), np.exp(val_pred))
+        val_mae = val_metrics["MAE"]
         
 
-        if val_rmse < best_val_rmse:
-            best_val_rmse = val_rmse
+        if val_mae < best_val_mae:
+            best_val_mae = val_mae
             best_mean_params = mean_params
 
     trainval_df = pd.concat([train_df, val_df], axis=0)
@@ -523,7 +557,7 @@ def train_mean_model(
     best_reg.fit(X_trainval, y_trainval)
 
     test_pred = best_reg.predict(X_test)
-    test_metrics = regression_metrics(y_test, test_pred)
+    test_metrics = regression_metrics(np.exp(y_test), np.exp(test_pred))
 
     return {
         "name": model_name,
@@ -531,15 +565,6 @@ def train_mean_model(
         "best_mean_params": best_mean_params,
         "metrics": test_metrics
     }
-
-def prep_df(df, predict=False):
-    df = df.copy()
-    df["log_quantity"] = np.log1p(df["quantity"])
-    df["month"] = df["closing_date"].dt.month
-    df["year"] = df["closing_date"].dt.year
-    if not predict:
-        df["unit_price"] = df["unit_price"] / 1000
-    return df
 
 
 def train_scale_model(
@@ -605,8 +630,9 @@ def train_scale_model(
     best_reg._fit(X_trainval, y_trainval)
 
     test_dist = best_reg._predict_proba(X_test)
-    test_pred = test_dist.mu
     test_nll = -np.mean(test_dist.log_pdf(y_test))
+    test_coverage_50 = lognormal_coverage(y_test, test_dist.mu, test_dist.sigma, 0.5)
+    test_coverage_90 = lognormal_coverage(y_test, test_dist.mu, test_dist.sigma, 0.9)
 
     all_df = pd.concat([train_df, val_df, test_df], axis=0)
 
@@ -627,7 +653,9 @@ def train_scale_model(
         "name": model_name,
         "best_residual_params": best_residual_params,
         "test_nll": test_nll,
-        "test_mean_pred": test_pred,
+        "test_coverage_50": test_coverage_50,
+        "test_coverage_90": test_coverage_90,
+        "test_pred": test_dist,
         "reg": final_reg,
         "transfo": hier_mean_transformer
     }
@@ -643,7 +671,7 @@ def predict_winning_price_scale_model(
     use_y_pred,
 ):  
     mean_model_summary = []
-    best_mean_test_rmse = +np.inf
+    best_mean_test_mae = +np.inf
     best_mean_model_info = None
     for (mean_model_name, mean_model_class) in zip(mean_model_names, mean_model_classes):
         info = train_mean_model(
@@ -656,8 +684,8 @@ def predict_winning_price_scale_model(
         summary = {"mean_model": mean_model_name}
         summary.update(info["metrics"])
         mean_model_summary.append(summary)
-        if info["metrics"]["RMSE"] < best_mean_test_rmse:
-            best_mean_test_rmse = info["metrics"]["RMSE"]
+        if info["metrics"]["MAE"] < best_mean_test_mae:
+            best_mean_test_mae = info["metrics"]["MAE"]
             best_mean_model_info = info
     
     full_model_summary = []
@@ -675,14 +703,17 @@ def predict_winning_price_scale_model(
             residual_param_grid=param_grid_map[resid_model_name],
             use_y_pred=use_y_pred
         )
-        test_mu = info["test_mean_pred"]
-        reg = regression_metrics(test_df[[target]], test_mu)
+        test_mu, test_sigma = info["test_pred"].mu, info["test_pred"].sigma
+        test_pred_median, test_pred_mean = revert_log_price(test_mu, test_sigma)
+        reg = regression_metrics(np.exp(test_df[target]), test_pred_median, test_pred_mean)
         summary = {
             "name": info["name"],
             "MAE": reg["MAE"],
             "RMSE": reg["RMSE"],
             "R2": reg["R2"],
             "NLL": info["test_nll"],
+            "Coverage_50": info["test_coverage_50"],
+            "Coverage_90": info["test_coverage_90"]
         }
         full_model_summary.append(summary)
         if info["test_nll"] < best_test_nll:
