@@ -122,8 +122,10 @@ def generate_checkboxes(cname: str):
 def generate_slider(cname: str):
     df = st.session_state["data"]
 
+    st.markdown(f"**{cname.replace("_", " ").capitalize()}**")
     st.slider(
         f"{cname.replace("_", " ").capitalize()}",
+        label_visibility="collapsed",
         min_value=df[cname].min(),
         max_value=df[cname].max(),
         key=f"Filter: {cname}",
@@ -133,24 +135,46 @@ def generate_slider(cname: str):
 def generate_date_range(cname: str):
     df = st.session_state["data"]
 
-    st.subheader(f"{cname.replace("_", " ").capitalize()}")
-    left_col, right_col = st.columns([1, 1], gap="small")
+    left_col, right_col = st.columns([5, 1], gap="xxlarge", vertical_alignment="center")
     with left_col:
-        st.date_input(
-            "From",
-            min_value=df[cname].min(),
-            max_value=df[cname].max(),
-            format="DD-MM-YYYY",
-            key=f"Filter: min {cname}",
-        )
+        st.markdown(f"**{cname.replace("_", " ").capitalize()}**")
     with right_col:
-        st.date_input(
-            "To",
-            min_value=df[cname].min(),
-            max_value=df[cname].max(),
-            format="DD-MM-YYYY",
-            key=f"Filter: max {cname}",
+        st.button(
+            "🗑️",
+            key=f"button: erase {cname}",
+            help="Clear this filter",
+            on_click=lambda: (st.session_state[f"Filter: min {cname}"].clear(), st.session_state[f"Filter: max {cname}"].clear()),
+            type="tertiary",
+            use_container_width=True,
         )
+
+    left_col, right_col = st.columns([1, 1], gap="small", vertical_alignment="center")
+    with left_col:
+        label, input = st.columns([1, 3], gap="xxsmall", vertical_alignment="center")
+        with label:
+            st.markdown(f"From:")
+        with input:
+            st.date_input(
+                "From",
+                label_visibility="collapsed",
+                min_value=df[cname].min(),
+                max_value=df[cname].max(),
+                format="DD-MM-YYYY",
+                key=f"Filter: min {cname}",
+            )
+    with right_col:
+        label, input = st.columns([1, 3], gap="xxsmall", vertical_alignment="center")
+        with label:
+            st.markdown(f"To:")
+        with input:
+            st.date_input(
+                "To",
+                label_visibility="collapsed",
+                min_value=df[cname].min(),
+                max_value=df[cname].max(),
+                format="DD-MM-YYYY",
+                key=f"Filter: max {cname}",
+            )
 
 
 st.set_page_config(page_title="Tender Market Analytics", layout="wide")
@@ -219,8 +243,30 @@ with right_col:
                 if df.empty:
                     st.info("No result. Try adjusting your filters.")
                 else:
-                    df[colnames.unit_price] /= 1e6
-                    df[colnames.total_price] /= 1e9
+                    if df[colnames.unit_price].max() < 1e3:
+                        unit_unit_price = "VND"
+                    elif df[colnames.unit_price].max() < 1e6:
+                        df[colnames.unit_price] /= 1e3
+                        unit_unit_price = "thousand VND"
+                    elif df[colnames.unit_price].max() < 1e9:
+                        df[colnames.unit_price] /= 1e6
+                        unit_unit_price = "million VND"
+                    else:
+                        df[colnames.unit_price] /= 1e9
+                        unit_unit_price = "billion VND"
+                    
+                    if df[colnames.total_price].max() < 1e3:
+                        unit_total_price = "VND"
+                    elif df[colnames.total_price].max() < 1e6:
+                        df[colnames.total_price] /= 1e3
+                        unit_total_price = "thousand VND"
+                    elif df[colnames.total_price].max() < 1e9:
+                        df[colnames.total_price] /= 1e6
+                        unit_total_price = "million VND"
+                    else:
+                        df[colnames.total_price] /= 1e9
+                        unit_total_price = "billion VND"
+
                     with st.container():
                         st.subheader("Distribution of unit prices")
 
@@ -229,27 +275,22 @@ with right_col:
                             alt.Chart(df)
                             .mark_bar()
                             .encode(
-                                x=alt.X(
-                                    colnames.unit_price,
-                                    bin=alt.Bin(maxbins=bins),
-                                    title="Unit price (million VND)",
-                                    scale=alt.Scale(domainMin=0),
-                                ),
+                                x=alt.X(colnames.unit_price, bin=alt.Bin(maxbins=bins), title=f"Unit price ({unit_unit_price})"),
                                 y=alt.Y("count()", title="Count"),
                             )
                         )
                         background = (
                             bars.encode(
                                 tooltip=[
-                                    alt.Tooltip("mean:Q", title="Mean (million VND)"),
+                                    alt.Tooltip("mean:Q", title=f"Mean ({unit_unit_price})"),
                                     alt.Tooltip(
                                         "std:Q",
-                                        title="Standard deviation (million VND)",
+                                        title=f"Standard deviation ({unit_unit_price})",
                                     ),
-                                    alt.Tooltip("min:Q", title="Min (million VND)"),
-                                    alt.Tooltip("q1:Q", title="Q1 (million VND)"),
-                                    alt.Tooltip("q3:Q", title="Q3 (million VND)"),
-                                    alt.Tooltip("max:Q", title="Max (million VND)"),
+                                    alt.Tooltip("min:Q", title=f"Min ({unit_unit_price})"),
+                                    alt.Tooltip("q1:Q", title=f"Q1 ({unit_unit_price})"),
+                                    alt.Tooltip("q3:Q", title=f"Q3 ({unit_unit_price})"),
+                                    alt.Tooltip("max:Q", title=f"Max ({unit_unit_price})"),
                                 ]
                             )
                             .transform_calculate(
@@ -286,7 +327,7 @@ with right_col:
                             .encode(
                                 x=alt.X(
                                     colnames.total_price,
-                                    title="Total price (billion VND)",
+                                    title=f"Total price ({unit_total_price})",
                                 ),
                                 y=alt.Y(
                                     colnames.contractor_name,
@@ -315,7 +356,7 @@ with right_col:
                             .encode(
                                 x=alt.X(
                                     colnames.total_price,
-                                    title="Total price (billion VND)",
+                                    title=f"Total price ({unit_total_price})",
                                 ),
                                 y=alt.Y(
                                     colnames.investor,
@@ -345,7 +386,7 @@ with right_col:
                             .encode(
                                 x=alt.X(
                                     colnames.unit_price,
-                                    title="Unit price (million VND)",
+                                    title=f"Unit price ({unit_unit_price})",
                                 ),
                                 y=alt.Y(
                                     colnames.contractor_name,
@@ -379,7 +420,7 @@ with right_col:
                             .encode(
                                 x=alt.X(
                                     colnames.unit_price,
-                                    title="Unit price (million VND)",
+                                    title=f"Unit price ({unit_unit_price})",
                                 ),
                                 y=alt.Y(
                                     colnames.country_origin,
@@ -413,7 +454,7 @@ with right_col:
                             .encode(
                                 x=alt.X(
                                     colnames.unit_price,
-                                    title="Unit price (million VND)",
+                                    title=f"Unit price ({unit_unit_price})",
                                 ),
                                 y=alt.Y(
                                     colnames.manufacturer,
@@ -465,7 +506,7 @@ with right_col:
                             alt.Chart(data)
                             .mark_arc()
                             .encode(
-                                theta=alt.Theta(colnames.total_price, title="Total price", sort="x"),
+                                theta=alt.Theta(colnames.total_price, title=f"Total price ({unit_total_price})", sort="x"),
                                 color=alt.Color(
                                     colnames.country_origin,
                                     title="Country of origin",
@@ -485,7 +526,7 @@ with right_col:
                                     ),
                                     alt.Tooltip(
                                         colnames.total_price,
-                                        title="Total price",
+                                        title=f"Total price ({unit_total_price})",
                                         format=",.3f",
                                     ),
                                 ],
@@ -521,7 +562,7 @@ with right_col:
                             alt.Chart(data)
                             .mark_arc()
                             .encode(
-                                theta=alt.Theta(colnames.total_price, title="Total price", sort="x"),
+                                theta=alt.Theta(colnames.total_price, title=f"Total price ({unit_total_price})", sort="x"),
                                 color=alt.Color(
                                     colnames.region_origin,
                                     legend=alt.Legend(
@@ -537,7 +578,7 @@ with right_col:
                                     alt.Tooltip(colnames.region_origin, title="Region of origin"),
                                     alt.Tooltip(
                                         colnames.total_price,
-                                        title="Total price",
+                                        title=f"Total price ({unit_total_price})",
                                         format=",.3f",
                                     ),
                                 ],
@@ -573,7 +614,7 @@ with right_col:
                             alt.Chart(data)
                             .mark_arc()
                             .encode(
-                                theta=alt.Theta(colnames.total_price, title="Total price", sort="x"),
+                                theta=alt.Theta(colnames.total_price, title=f"Total price ({unit_total_price})", sort="x"),
                                 color=alt.Color(
                                     colnames.manufacturer,
                                     legend=alt.Legend(
@@ -589,7 +630,7 @@ with right_col:
                                     alt.Tooltip(colnames.manufacturer, title="Manufacturer"),
                                     alt.Tooltip(
                                         colnames.total_price,
-                                        title="Total price",
+                                        title=f"Total price ({unit_total_price})",
                                         format=",.3f",
                                     ),
                                 ],
