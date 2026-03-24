@@ -816,14 +816,18 @@ with right_col:
 
                         quantile_levels = [0.1, 0.25, 0.5, 0.75, 0.9]
                         quantiles = {q: to_scalar(dist.ppf(q)) for q in quantile_levels}
+                        quantiles_non_negative = {q: max(0.0, quantiles[q]) for q in quantile_levels}
 
-                        x_low = to_scalar(dist.ppf(0.001))
+                        x_low = 0.0
                         x_high = to_scalar(dist.ppf(0.999))
+                        if not np.isfinite(x_high) or x_high <= x_low:
+                            x_high = max(quantiles_non_negative[0.9], quantiles_non_negative[0.5], 1.0)
+                        if x_high <= x_low:
+                            x_high = x_low + 1.0
                         if not (np.isfinite(x_low) and np.isfinite(x_high)) or x_low >= x_high:
-                            x_low = quantiles[0.1]
-                            x_high = quantiles[0.9]
+                            x_low = 0.0
+                            x_high = max(quantiles_non_negative[0.9], quantiles_non_negative[0.5], 1.0)
                             pad = max((x_high - x_low) * 0.3, 1.0)
-                            x_low -= pad
                             x_high += pad
 
                         x_grid = np.linspace(x_low, x_high, 400)
@@ -844,7 +848,7 @@ with right_col:
                             q_df = pd.DataFrame(
                                 {
                                     "quantile": quantile_levels,
-                                    "x": [quantiles[q] for q in quantile_levels],
+                                    "x": [quantiles_non_negative[q] for q in quantile_levels],
                                 }
                             )
                             q_df["label"] = q_df["quantile"].map(lambda q: f"q={q:.2f}")
@@ -853,11 +857,11 @@ with right_col:
                             segment_edges = np.array(
                                 [
                                     x_low,
-                                    quantiles[0.1],
-                                    quantiles[0.25],
-                                    quantiles[0.5],
-                                    quantiles[0.75],
-                                    quantiles[0.9],
+                                    quantiles_non_negative[0.1],
+                                    quantiles_non_negative[0.25],
+                                    quantiles_non_negative[0.5],
+                                    quantiles_non_negative[0.75],
+                                    quantiles_non_negative[0.9],
                                     x_high,
                                 ],
                                 dtype=float,
@@ -889,7 +893,7 @@ with right_col:
                                     y=alt.Y("pdf:Q", title="Density"),
                                     color=alt.Color("segment:N", title="Distribution band", scale=segment_scale),
                                     tooltip=[
-                                        alt.Tooltip("x:Q", title="Unit price", format=",.0f"),
+                                        alt.Tooltip("x:Q", title="Unit price", format=",.3f"),
                                         alt.Tooltip("pdf:Q", title="Density", format=".6f"),
                                         alt.Tooltip("segment:N", title="Band"),
                                     ],
@@ -916,7 +920,7 @@ with right_col:
                                     y2=alt.Y2("pdf:Q"),
                                     tooltip=[
                                         alt.Tooltip("label:N", title="Quantile"),
-                                        alt.Tooltip("x:Q", title="Value", format=",.0f"),
+                                        alt.Tooltip("x:Q", title="Value", format=",.3f"),
                                     ],
                                 )
                             )
@@ -929,7 +933,7 @@ with right_col:
                                     y=alt.Y("pdf:Q"),
                                     tooltip=[
                                         alt.Tooltip("label:N", title="Quantile"),
-                                        alt.Tooltip("x:Q", title="Value", format=",.0f"),
+                                        alt.Tooltip("x:Q", title="Value", format=",.3f"),
                                         alt.Tooltip("pdf:Q", title="Density", format=".6f"),
                                     ],
                                 )
