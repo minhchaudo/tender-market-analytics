@@ -73,8 +73,17 @@ def handle_search_click():
     st.session_state["model_auto"] = None
     st.session_state["prediction"] = None
 
+
 def handle_predict_click():
-    if not ((st.session_state[f"Predict: {colnames.investor}"] is not None) and (st.session_state[f"Predict: {colnames.province}"] is not None) and (st.session_state[f"Predict: {colnames.quantity}"] is not None) and (st.session_state[f"Predict: {colnames.closing_date}"] is not None) and (st.session_state[f"Predict: {colnames.manufacturer}"] is not None) and (st.session_state[f"Predict: {colnames.country_origin}"] is not None) and (st.session_state[f"Predict: model_class"] is not None)):
+    if not (
+        (st.session_state[f"Predict: {colnames.investor}"] is not None)
+        and (st.session_state[f"Predict: {colnames.province}"] is not None)
+        and (st.session_state[f"Predict: {colnames.quantity}"] is not None)
+        and (st.session_state[f"Predict: {colnames.closing_date}"] is not None)
+        and (st.session_state[f"Predict: {colnames.manufacturer}"] is not None)
+        and (st.session_state[f"Predict: {colnames.country_origin}"] is not None)
+        and (st.session_state[f"Predict: model_class"] is not None)
+    ):
         with banner:
             st.error("Please fill all the required fields!")
     else:
@@ -83,7 +92,18 @@ def handle_predict_click():
             st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"] = model
         else:
             model = st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"]
-        st.session_state["prediction"] = predict({colnames.investor: st.session_state[f"Predict: {colnames.investor}"], colnames.province: st.session_state[f"Predict: {colnames.province}"], colnames.quantity: st.session_state[f"Predict: {colnames.quantity}"], colnames.closing_date: st.session_state[f"Predict: {colnames.closing_date}"], colnames.manufacturer: st.session_state[f"Predict: {colnames.manufacturer}"], colnames.country_origin: st.session_state[f"Predict: {colnames.country_origin}"]}, model)
+        st.session_state["prediction"] = predict(
+            {
+                colnames.investor: st.session_state[f"Predict: {colnames.investor}"],
+                colnames.province: st.session_state[f"Predict: {colnames.province}"],
+                colnames.quantity: st.session_state[f"Predict: {colnames.quantity}"],
+                colnames.closing_date: st.session_state[f"Predict: {colnames.closing_date}"],
+                colnames.manufacturer: st.session_state[f"Predict: {colnames.manufacturer}"],
+                colnames.country_origin: st.session_state[f"Predict: {colnames.country_origin}"],
+            },
+            model,
+        )
+
 
 def generate_label_filter(cname: str):
     label_col, button_col = st.columns([5, 1], gap="xxlarge", vertical_alignment="center")
@@ -132,7 +152,11 @@ def generate_checkboxes(cname: str):
             e.replace("_", " "),
             key=f"checkbox: {cname}: {e}",
             value=e in st.session_state[f"Filter: {cname}"],
-            on_change=lambda e=e: (st.session_state[f"Filter: {cname}"].add(e) if st.session_state.get(f"checkbox: {cname}: {e}", False) else st.session_state[f"Filter: {cname}"].discard(e)),
+            on_change=lambda e=e: (
+                st.session_state[f"Filter: {cname}"].add(e)
+                if st.session_state.get(f"checkbox: {cname}: {e}", False)
+                else st.session_state[f"Filter: {cname}"].discard(e)
+            ),
         )
 
 
@@ -231,16 +255,52 @@ with right_col:
                 st.info("No result. Try another query.")
             else:
                 raw_df = st.session_state["data"]
-                s_post = st.session_state[f"Filter: min {colnames.posting_date}"] if st.session_state[f"Filter: min {colnames.posting_date}"] is not None else raw_df[colnames.posting_date].min()
-                e_post = st.session_state[f"Filter: max {colnames.posting_date}"] if st.session_state[f"Filter: max {colnames.posting_date}"] is not None else raw_df[colnames.posting_date].max()
-                s_bid = st.session_state[f"Filter: min {colnames.closing_date}"] if st.session_state[f"Filter: min {colnames.closing_date}"] is not None else raw_df[colnames.closing_date].min()
-                e_bid = st.session_state[f"Filter: max {colnames.closing_date}"] if st.session_state[f"Filter: max {colnames.closing_date}"] is not None else raw_df[colnames.closing_date].max()
+                s_post = (
+                    st.session_state[f"Filter: min {colnames.posting_date}"]
+                    if st.session_state[f"Filter: min {colnames.posting_date}"] is not None
+                    else raw_df[colnames.posting_date].min()
+                )
+                e_post = (
+                    st.session_state[f"Filter: max {colnames.posting_date}"]
+                    if st.session_state[f"Filter: max {colnames.posting_date}"] is not None
+                    else raw_df[colnames.posting_date].max()
+                )
+                s_bid = (
+                    st.session_state[f"Filter: min {colnames.closing_date}"]
+                    if st.session_state[f"Filter: min {colnames.closing_date}"] is not None
+                    else raw_df[colnames.closing_date].min()
+                )
+                e_bid = (
+                    st.session_state[f"Filter: max {colnames.closing_date}"]
+                    if st.session_state[f"Filter: max {colnames.closing_date}"] is not None
+                    else raw_df[colnames.closing_date].max()
+                )
                 df = raw_df[
-                    (raw_df[colnames.investor].isin(st.session_state[f"Filter: {colnames.investor}"]) if st.session_state[f"Filter: {colnames.investor}"] else True)
-                    & (raw_df[colnames.contractor_name].isin(st.session_state[f"Filter: {colnames.contractor_name}"]) if st.session_state[f"Filter: {colnames.contractor_name}"] else True)
-                    & (raw_df[colnames.manufacturer].isin(st.session_state[f"Filter: {colnames.manufacturer}"]) if st.session_state[f"Filter: {colnames.manufacturer}"] else True)
-                    & (raw_df[colnames.country_origin].isin(st.session_state[f"Filter: {colnames.country_origin}"]) if st.session_state[f"Filter: {colnames.country_origin}"] else True)
-                    & (raw_df[colnames.region_origin].isin(st.session_state[f"Filter: {colnames.region_origin}"]) if st.session_state[f"Filter: {colnames.region_origin}"] else True)
+                    (
+                        raw_df[colnames.investor].isin(st.session_state[f"Filter: {colnames.investor}"])
+                        if st.session_state[f"Filter: {colnames.investor}"]
+                        else True
+                    )
+                    & (
+                        raw_df[colnames.contractor_name].isin(st.session_state[f"Filter: {colnames.contractor_name}"])
+                        if st.session_state[f"Filter: {colnames.contractor_name}"]
+                        else True
+                    )
+                    & (
+                        raw_df[colnames.manufacturer].isin(st.session_state[f"Filter: {colnames.manufacturer}"])
+                        if st.session_state[f"Filter: {colnames.manufacturer}"]
+                        else True
+                    )
+                    & (
+                        raw_df[colnames.country_origin].isin(st.session_state[f"Filter: {colnames.country_origin}"])
+                        if st.session_state[f"Filter: {colnames.country_origin}"]
+                        else True
+                    )
+                    & (
+                        raw_df[colnames.region_origin].isin(st.session_state[f"Filter: {colnames.region_origin}"])
+                        if st.session_state[f"Filter: {colnames.region_origin}"]
+                        else True
+                    )
                     & (raw_df[colnames.quantity].between(*st.session_state[f"Filter: {colnames.quantity}"]))
                     & (raw_df[colnames.unit_price].between(*st.session_state[f"Filter: {colnames.unit_price}"]))
                     & (raw_df[colnames.total_price].between(*st.session_state[f"Filter: {colnames.total_price}"]))
@@ -337,7 +397,12 @@ with right_col:
                     with st.container():
                         st.subheader("Top contractors")
 
-                        data = df.groupby(colnames.contractor_name, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(5)
+                        data = (
+                            df.groupby(colnames.contractor_name, as_index=False)[colnames.total_price]
+                            .sum()
+                            .sort_values(by=colnames.total_price, ascending=False)
+                            .head(5)
+                        )
                         st.altair_chart(
                             alt.Chart(data)
                             .mark_bar()
@@ -366,7 +431,12 @@ with right_col:
                     with st.container():
                         st.subheader("Top investor")
 
-                        data = df.groupby(colnames.investor, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(5)
+                        data = (
+                            df.groupby(colnames.investor, as_index=False)[colnames.total_price]
+                            .sum()
+                            .sort_values(by=colnames.total_price, ascending=False)
+                            .head(5)
+                        )
                         st.altair_chart(
                             alt.Chart(data)
                             .mark_bar()
@@ -395,7 +465,12 @@ with right_col:
                     with st.container():
                         st.subheader("Unit price by contractor")
 
-                        top_bidder = set(df.groupby(colnames.contractor_name, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(10)[colnames.contractor_name])
+                        top_bidder = set(
+                            df.groupby(colnames.contractor_name, as_index=False)[colnames.total_price]
+                            .sum()
+                            .sort_values(by=colnames.total_price, ascending=False)
+                            .head(10)[colnames.contractor_name]
+                        )
                         data = df[df[colnames.contractor_name].isin(top_bidder)]
                         st.altair_chart(
                             alt.Chart(data)
@@ -429,7 +504,12 @@ with right_col:
                     with st.container():
                         st.subheader("Unit price by origin")
 
-                        top_origin = set(df.groupby(colnames.country_origin, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(10)[colnames.country_origin])
+                        top_origin = set(
+                            df.groupby(colnames.country_origin, as_index=False)[colnames.total_price]
+                            .sum()
+                            .sort_values(by=colnames.total_price, ascending=False)
+                            .head(10)[colnames.country_origin]
+                        )
                         data = df[df[colnames.country_origin].isin(top_origin)]
                         st.altair_chart(
                             alt.Chart(data)
@@ -463,7 +543,12 @@ with right_col:
                     with st.container():
                         st.subheader("Unit price by manufacturer")
 
-                        top_origin = set(df.groupby(colnames.manufacturer, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(10)[colnames.manufacturer])
+                        top_origin = set(
+                            df.groupby(colnames.manufacturer, as_index=False)[colnames.total_price]
+                            .sum()
+                            .sort_values(by=colnames.total_price, ascending=False)
+                            .head(10)[colnames.manufacturer]
+                        )
                         data = df[df[colnames.manufacturer].isin(top_origin)]
                         st.altair_chart(
                             alt.Chart(data)
@@ -497,7 +582,11 @@ with right_col:
                     with st.container():
                         st.subheader("Total value by country of origin")
 
-                        data_by_origin = df.groupby(colnames.country_origin, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False)
+                        data_by_origin = (
+                            df.groupby(colnames.country_origin, as_index=False)[colnames.total_price]
+                            .sum()
+                            .sort_values(by=colnames.total_price, ascending=False)
+                        )
                         top9 = data_by_origin.head(9)
                         rest = data_by_origin.iloc[9:][colnames.total_price].sum()
 
@@ -553,7 +642,9 @@ with right_col:
                     with st.container():
                         st.subheader("Total value by region of origin")
 
-                        data_by_origin = df.groupby(colnames.region_origin, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False)
+                        data_by_origin = (
+                            df.groupby(colnames.region_origin, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False)
+                        )
                         top9 = data_by_origin.head(9)
                         rest = data_by_origin.iloc[9:][colnames.total_price].sum()
 
@@ -605,7 +696,9 @@ with right_col:
                     with st.container():
                         st.subheader("Total value by manufacturer")
 
-                        data_by_origin = df.groupby(colnames.manufacturer, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False)
+                        data_by_origin = (
+                            df.groupby(colnames.manufacturer, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False)
+                        )
                         top9 = data_by_origin.head(9)
                         rest = data_by_origin.iloc[9:][colnames.total_price].sum()
 
@@ -757,15 +850,18 @@ with right_col:
                             q_df["label"] = q_df["quantile"].map(lambda q: f"q={q:.2f}")
                             q_df["pdf"] = np.interp(q_df["x"], density_df["x"], density_df["pdf"])
 
-                            segment_edges = np.array([
-                                x_low,
-                                quantiles[0.1],
-                                quantiles[0.25],
-                                quantiles[0.5],
-                                quantiles[0.75],
-                                quantiles[0.9],
-                                x_high,
-                            ], dtype=float)
+                            segment_edges = np.array(
+                                [
+                                    x_low,
+                                    quantiles[0.1],
+                                    quantiles[0.25],
+                                    quantiles[0.5],
+                                    quantiles[0.75],
+                                    quantiles[0.9],
+                                    x_high,
+                                ],
+                                dtype=float,
+                            )
                             for i in range(1, len(segment_edges)):
                                 if segment_edges[i] <= segment_edges[i - 1]:
                                     segment_edges[i] = np.nextafter(segment_edges[i - 1], np.inf)
@@ -778,51 +874,65 @@ with right_col:
                                 "q0.75 - q0.90",
                                 ">= q0.90",
                             ]
-                            density_df["segment"] = pd.cut(
-                                density_df["x"], bins=segment_edges, labels=segment_labels, include_lowest=True
-                            )
+                            density_df["segment"] = pd.cut(density_df["x"], bins=segment_edges, labels=segment_labels, include_lowest=True)
 
                             segment_scale = alt.Scale(
                                 domain=segment_labels,
                                 range=["#e8eef6", "#cddff1", "#96c0e6", "#5fa1d9", "#2e7fc5", "#15599b"],
                             )
 
-                            density_chart = alt.Chart(density_df).mark_area(opacity=0.65).encode(
-                                x=alt.X("x:Q", title="Unit price (thousand VND)"),
-                                y=alt.Y("pdf:Q", title="Density"),
-                                color=alt.Color("segment:N", title="Distribution band", scale=segment_scale),
-                                tooltip=[
-                                    alt.Tooltip("x:Q", title="Unit price", format=",.0f"),
-                                    alt.Tooltip("pdf:Q", title="Density", format=".6f"),
-                                    alt.Tooltip("segment:N", title="Band"),
-                                ],
+                            density_chart = (
+                                alt.Chart(density_df)
+                                .mark_area(opacity=0.65)
+                                .encode(
+                                    x=alt.X("x:Q", title="Unit price (thousand VND)"),
+                                    y=alt.Y("pdf:Q", title="Density"),
+                                    color=alt.Color("segment:N", title="Distribution band", scale=segment_scale),
+                                    tooltip=[
+                                        alt.Tooltip("x:Q", title="Unit price", format=",.0f"),
+                                        alt.Tooltip("pdf:Q", title="Density", format=".6f"),
+                                        alt.Tooltip("segment:N", title="Band"),
+                                    ],
+                                )
                             )
 
-                            density_outline = alt.Chart(density_df).mark_line(color="#0b3c6f", strokeWidth=2).encode(
-                                x=alt.X("x:Q", title="Unit price (thousand VND)"),
-                                y=alt.Y("pdf:Q", title="Density"),
+                            density_outline = (
+                                alt.Chart(density_df)
+                                .mark_line(color="#0b3c6f", strokeWidth=2)
+                                .encode(
+                                    x=alt.X("x:Q", title="Unit price (thousand VND)"),
+                                    y=alt.Y("pdf:Q", title="Density"),
+                                )
                             )
 
                             q_df["y0"] = 0.0
 
-                            q_rules = alt.Chart(q_df).mark_rule(strokeWidth=2, strokeDash=[6, 6], color="#1f2937").encode(
-                                x=alt.X("x:Q"),
-                                y=alt.Y("y0:Q"),
-                                y2=alt.Y2("pdf:Q"),
-                                tooltip=[
-                                    alt.Tooltip("label:N", title="Quantile"),
-                                    alt.Tooltip("x:Q", title="Value", format=",.0f"),
-                                ],
+                            q_rules = (
+                                alt.Chart(q_df)
+                                .mark_rule(strokeWidth=2, strokeDash=[6, 6], color="#1f2937")
+                                .encode(
+                                    x=alt.X("x:Q"),
+                                    y=alt.Y("y0:Q"),
+                                    y2=alt.Y2("pdf:Q"),
+                                    tooltip=[
+                                        alt.Tooltip("label:N", title="Quantile"),
+                                        alt.Tooltip("x:Q", title="Value", format=",.0f"),
+                                    ],
+                                )
                             )
 
-                            q_points = alt.Chart(q_df).mark_point(size=80, filled=True, color="#1f2937").encode(
-                                x=alt.X("x:Q"),
-                                y=alt.Y("pdf:Q"),
-                                tooltip=[
-                                    alt.Tooltip("label:N", title="Quantile"),
-                                    alt.Tooltip("x:Q", title="Value", format=",.0f"),
-                                    alt.Tooltip("pdf:Q", title="Density", format=".6f"),
-                                ],
+                            q_points = (
+                                alt.Chart(q_df)
+                                .mark_point(size=80, filled=True, color="#1f2937")
+                                .encode(
+                                    x=alt.X("x:Q"),
+                                    y=alt.Y("pdf:Q"),
+                                    tooltip=[
+                                        alt.Tooltip("label:N", title="Quantile"),
+                                        alt.Tooltip("x:Q", title="Value", format=",.0f"),
+                                        alt.Tooltip("pdf:Q", title="Density", format=".6f"),
+                                    ],
+                                )
                             )
 
                             st.subheader("Predicted winning bid price distribution")
@@ -833,4 +943,3 @@ with right_col:
                                 .configure_axis(labelColor="black", titleColor="black", labelFontSize=14, titleFontSize=14),
                                 width="stretch",
                             )
-                        
