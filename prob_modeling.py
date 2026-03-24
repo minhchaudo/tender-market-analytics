@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import random
-from tqdm import tqdm
+from stqdm import stqdm
 from sklearn.base import BaseEstimator
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
@@ -17,7 +17,6 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 from lightgbm import LGBMRegressor
 from sklearn import clone
-import copy
 from sklearn.model_selection import ParameterSampler
 from itertools import combinations
 import warnings
@@ -527,6 +526,7 @@ def train_mean_model(
     model_name,
     mean_model_class,
     mean_param_grid,
+    progress_space
 ):  
     param_sampler = ParameterSampler(
         mean_param_grid,
@@ -545,7 +545,7 @@ def train_mean_model(
     best_val_mae = np.inf
     best_mean_params = None
 
-    for mean_params in tqdm(list(param_sampler)):
+    for mean_params in stqdm(list(param_sampler), st_container=progress_space):
 
         reg = mean_model_class(**mean_params)
 
@@ -591,7 +591,8 @@ def train_scale_model(
     residual_model_class,
     mean_params,
     residual_param_grid,
-    use_y_pred
+    use_y_pred,
+    progress_space
 ):  
     param_sampler = ParameterSampler(
         residual_param_grid,
@@ -610,7 +611,7 @@ def train_scale_model(
     best_val_nll = np.inf
     best_residual_params = None
 
-    for residual_params in tqdm(list(param_sampler)):
+    for residual_params in stqdm(list(param_sampler), st_container=progress_space):
 
         reg = ResidualDoubleCVSafe(
             estimator=mean_model_class(**mean_params),
@@ -685,6 +686,7 @@ def predict_winning_price_scale_model(
     resid_model_classes,
     param_grid_map,
     use_y_pred,
+    progress_space
 ):  
     mean_model_summary = []
     best_mean_test_mae = +np.inf
@@ -696,6 +698,7 @@ def predict_winning_price_scale_model(
             mean_model_name,
             mean_model_class,
             param_grid_map[mean_model_name],
+            progress_space=progress_space
         )
         summary = {"mean_model": mean_model_name}
         summary.update(info["metrics"])
@@ -717,7 +720,8 @@ def predict_winning_price_scale_model(
             residual_model_class=resid_model_class,
             mean_params=best_mean_model_info["best_mean_params"],
             residual_param_grid=param_grid_map[resid_model_name],
-            use_y_pred=use_y_pred
+            use_y_pred=use_y_pred,
+            progress_space=progress_space
         )
         test_mu, test_sigma = info["test_pred"].mu, info["test_pred"].sigma
         test_pred_median, test_pred_mean = revert_log_price(test_mu, test_sigma)
@@ -739,7 +743,7 @@ def predict_winning_price_scale_model(
             best_full_model_info["transfo"] = info["transfo"]
     return best_full_model_info, mean_model_summary, full_model_summary
 
-def train_model(df, mode, need_prep=True):
+def train_model(df, mode, progress_space, need_prep=True):
     hier_mean_feats = HierMeanFeatureSet().get_feature_names_out()
 
     preprocessor_mean = ColumnTransformer(
@@ -801,7 +805,8 @@ def train_model(df, mode, need_prep=True):
         mean_model_classes=[name_to_class_map_mean[n] for n in mean_model_names],
         resid_model_classes=[name_to_class_map_resid[n] for n in resid_model_names],
         param_grid_map=name_to_params_map,
-        use_y_pred=True
+        use_y_pred=True,
+        progress_space=progress_space
     )
     return best_model, mean_model_summary, full_model_summary
 
@@ -823,4 +828,3 @@ if __name__ == "__main__":
     best_model, mean_model_summary, full_model_summary = train_model(df, mode="default", need_prep=True)
     print(best_model["metrics"])
     print(predict(df.iloc[0].to_dict(), best_model))
-
