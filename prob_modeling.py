@@ -740,6 +740,7 @@ def predict(X_hat_dict, model):
     assert all([k in X_hat_dict for k in required_keys])
     X_hat = {k: X_hat_dict[k] for k in required_keys}
     X_hat = pd.DataFrame([X_hat])
+    X_hat = prep_df(X_hat)
     pred_dist = model["reg"]._predict_proba(X_hat)
     return pred_dist
 
