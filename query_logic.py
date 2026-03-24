@@ -86,8 +86,8 @@ NUMERIC_FIELDS = {
 }
 
 DATE_FIELDS = {
-    "posting_time",
-    "closing_time",
+    "posting_date",
+    "closing_date",
 }
 
 ALL_QUERY_FIELDS = TEXT_FIELDS | NUMERIC_FIELDS | DATE_FIELDS
@@ -363,9 +363,6 @@ def query(query: str):
     cursor = conn.cursor()
 
     sql, params = compile_query_to_sql(query)
-
-    # print(sql)
-    # print(params)
 
     df = pd.read_sql_query(sql, conn, params=params)
 
