@@ -249,8 +249,25 @@ class HierMeanFeatureSet:
         return out
     
 class ResidualDoubleCVSafe(ResidualDouble):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self,
+        estimator,
+        estimator_resid=None,
+        residual_trafo="absolute",
+        distr_type="Normal",
+        distr_loc_scale_name=None,
+        distr_params=None,
+        use_y_pred=False,
+        cv=None,
+        min_scale=1e-10):
+        super().__init__(estimator,
+                        estimator_resid,
+                        residual_trafo,
+                        distr_type,
+                        distr_loc_scale_name,
+                        distr_params,
+                        use_y_pred,
+                        cv,
+                        min_scale)
 
     def _predict_residuals_cv(self, X, y, cv, est):
         method = "predict"
@@ -740,6 +757,7 @@ def predict(X_hat_dict, model):
     assert all([k in X_hat_dict for k in required_keys])
     X_hat = {k: X_hat_dict[k] for k in required_keys}
     X_hat = pd.DataFrame([X_hat])
+    X_hat = prep_df(X_hat)
     pred_dist = model["reg"]._predict_proba(X_hat)
     return pred_dist
 
