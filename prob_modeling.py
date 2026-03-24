@@ -410,7 +410,7 @@ class HierMean(BaseEstimator):
         return pred.fillna(self.global_mean_).to_numpy()
 
 
-def get_cv_fn(hier_mean_transformer, target, features, n_splits=3):
+def get_cv_fn(target, features, n_splits=3):
     def hiermean_cv(X, y):
         kf = KFold(n_splits)
 
@@ -429,7 +429,7 @@ def get_cv_fn(hier_mean_transformer, target, features, n_splits=3):
             train_df[target] = y_train
 
             # clone transformer (important!)
-            hmt = copy.deepcopy(hier_mean_transformer)
+            hmt = HierMeanFeatureSet()
             hmt.fit(train_df)
 
             # transform
@@ -480,13 +480,14 @@ def train_mean_model(
     model_name,
     mean_model_class,
     mean_param_grid,
-    hier_mean_transformer,
 ):  
     param_sampler = ParameterSampler(
         mean_param_grid,
         n_iter=N_SEARCH,
         random_state=RANDOM_STATE
     )
+
+    hier_mean_transformer = HierMeanFeatureSet()
     hier_mean_transformer.fit(train_df)
     train_df_tr = hier_mean_transformer.transform_train(train_df)
     val_df_tr = hier_mean_transformer.transform_test(val_df)
@@ -513,6 +514,8 @@ def train_mean_model(
             best_mean_params = mean_params
 
     trainval_df = pd.concat([train_df, val_df], axis=0)
+
+    hier_mean_transformer = HierMeanFeatureSet()
     hier_mean_transformer.fit(trainval_df)
     trainval_df_tr = hier_mean_transformer.transform_train(trainval_df)
     test_df_tr = hier_mean_transformer.transform_test(test_df)
@@ -532,13 +535,14 @@ def train_mean_model(
         "metrics": test_metrics
     }
 
-def prep_df(df):
+def prep_df(df, predict=False):
     df = df.copy()
     df["log_quantity"] = np.log1p(df["quantity"])
     df["date"] = pd.to_datetime(df["closing_date"], dayfirst=True)
     df["month"] = df["date"].dt.month
     df["year"] = df["date"].dt.year
-    df["unit_price"] = df["unit_price"] / 1000
+    if not predict:
+        df["unit_price"] = df["unit_price"] / 1000
     return df
 
 
@@ -550,7 +554,6 @@ def train_scale_model(
     residual_model_class,
     mean_params,
     residual_param_grid,
-    hier_mean_transformer,
     use_y_pred
 ):  
     param_sampler = ParameterSampler(
@@ -558,6 +561,8 @@ def train_scale_model(
         n_iter=N_SEARCH,
         random_state=RANDOM_STATE
     )
+
+    hier_mean_transformer = HierMeanFeatureSet()
     hier_mean_transformer.fit(train_df)
     train_df_tr = hier_mean_transformer.transform_train(train_df)
     val_df_tr = hier_mean_transformer.transform_test(val_df)
@@ -573,7 +578,7 @@ def train_scale_model(
         reg = ResidualDoubleCVSafe(
             estimator=mean_model_class(**mean_params),
             estimator_resid=residual_model_class(**residual_params),        use_y_pred=use_y_pred,
-            cv=get_cv_fn(hier_mean_transformer, target, features),
+            cv=get_cv_fn(target, features),
         )
 
         reg._fit(X_train, y_train)
@@ -587,16 +592,19 @@ def train_scale_model(
             best_residual_params = residual_params
 
     trainval_df = pd.concat([train_df, val_df], axis=0)
+
+    hier_mean_transformer = HierMeanFeatureSet()
     hier_mean_transformer.fit(trainval_df)
     trainval_df_tr = hier_mean_transformer.transform_train(trainval_df)
     test_df_tr = hier_mean_transformer.transform_test(test_df)
+
     X_trainval, y_trainval = trainval_df_tr[features], trainval_df_tr[[target]]
     X_test, y_test = test_df_tr[features], test_df_tr[[target]]
 
     best_reg = ResidualDoubleCVSafe(
         estimator=mean_model_class(**mean_params),
         estimator_resid=residual_model_class(**best_residual_params),        use_y_pred=use_y_pred,
-        cv=get_cv_fn(hier_mean_transformer, target, features),
+        cv=get_cv_fn(target, features),
     )
     best_reg._fit(X_trainval, y_trainval)
 
@@ -605,6 +613,8 @@ def train_scale_model(
     test_nll = -np.mean(test_dist.log_pdf(y_test))
 
     all_df = pd.concat([train_df, val_df, test_df], axis=0)
+
+    hier_mean_transformer = HierMeanFeatureSet()
     hier_mean_transformer.fit(all_df)
     all_df_tr = hier_mean_transformer.transform_train(all_df)
     X_all, y_all = all_df_tr[features], all_df_tr[[target]]
@@ -613,7 +623,7 @@ def train_scale_model(
         estimator=mean_model_class(**mean_params),
         estimator_resid=residual_model_class(**best_residual_params),
         use_y_pred=use_y_pred,
-        cv=get_cv_fn(hier_mean_transformer, target, features),
+        cv=get_cv_fn(target, features),
     )
     final_reg._fit(X_all, y_all)
 
@@ -623,6 +633,7 @@ def train_scale_model(
         "test_nll": test_nll,
         "test_mean_pred": test_pred,
         "reg": final_reg,
+        "transfo": hier_mean_transformer
     }
 
 def predict_winning_price_scale_model(
@@ -633,7 +644,6 @@ def predict_winning_price_scale_model(
     mean_model_classes,
     resid_model_classes,
     param_grid_map,
-    hier_mean_transformer,
     use_y_pred,
 ):  
     mean_model_summary = []
@@ -646,7 +656,6 @@ def predict_winning_price_scale_model(
             mean_model_name,
             mean_model_class,
             param_grid_map[mean_model_name],
-            hier_mean_transformer
         )
         summary = {"mean_model": mean_model_name}
         summary.update(info["metrics"])
@@ -668,7 +677,6 @@ def predict_winning_price_scale_model(
             residual_model_class=resid_model_class,
             mean_params=best_mean_model_info["best_mean_params"],
             residual_param_grid=param_grid_map[resid_model_name],
-            hier_mean_transformer=hier_mean_transformer,
             use_y_pred=use_y_pred
         )
         test_mu = info["test_mean_pred"]
@@ -685,11 +693,11 @@ def predict_winning_price_scale_model(
             best_test_nll = info["test_nll"]
             best_full_model_info = {"metrics": summary}
             best_full_model_info["reg"] = info["reg"]
+            best_full_model_info["transfo"] = info["transfo"]
     return best_full_model_info, mean_model_summary, full_model_summary
 
 def train_model(df, mode, need_prep=True):
-    hier_mean_transformer = HierMeanFeatureSet()
-    hier_mean_feats = hier_mean_transformer.get_feature_names_out()
+    hier_mean_feats = HierMeanFeatureSet().get_feature_names_out()
 
     preprocessor_mean = ColumnTransformer(
         transformers=[
@@ -747,17 +755,17 @@ def train_model(df, mode, need_prep=True):
         mean_model_classes=[name_to_class_map_mean[n] for n in mean_model_names],
         resid_model_classes=[name_to_class_map_resid[n] for n in resid_model_names],
         param_grid_map=name_to_params_map,
-        hier_mean_transformer=hier_mean_transformer,
         use_y_pred=True
     )
     return best_model, mean_model_summary, full_model_summary
 
 def predict(X_hat_dict, model):
-    required_keys = ["investor", "quantity", "manufacturer", "country_of_origin", "province"]
+    required_keys = ["investor", "quantity", "manufacturer", "country_of_origin", "province", "closing_date"]
     assert all([k in X_hat_dict for k in required_keys])
     X_hat = {k: X_hat_dict[k] for k in required_keys}
     X_hat = pd.DataFrame([X_hat])
-    X_hat = prep_df(X_hat)
+    X_hat = prep_df(X_hat, predict=True)
+    X_hat = model["transfo"].transform_test(X_hat)
     pred_dist = model["reg"]._predict_proba(X_hat)
     return pred_dist
 
@@ -768,4 +776,5 @@ if __name__ == "__main__":
     print(len(df))
     best_model, mean_model_summary, full_model_summary = train_model(df, mode="default", need_prep=True)
     print(best_model["metrics"])
+    print(predict(df.iloc[0].to_dict(), best_model))
 
