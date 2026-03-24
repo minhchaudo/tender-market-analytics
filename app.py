@@ -1,6 +1,7 @@
 import streamlit as st
 import altair as alt
 import pandas as pd
+import numpy as np
 from query_logic import query, SQLCompileError
 from prob_modeling import train_model, predict
 
@@ -70,7 +71,19 @@ def handle_search_click():
 
     st.session_state["model_default"] = None
     st.session_state["model_auto"] = None
+    st.session_state["prediction"] = None
 
+def handle_predict_click():
+    if not ((st.session_state[f"Predict: {colnames.investor}"] is not None) and (st.session_state[f"Predict: {colnames.province}"] is not None) and (st.session_state[f"Predict: {colnames.quantity}"] is not None) and (st.session_state[f"Predict: {colnames.closing_date}"] is not None) and (st.session_state[f"Predict: {colnames.manufacturer}"] is not None) and (st.session_state[f"Predict: {colnames.country_origin}"] is not None) and (st.session_state[f"Predict: model_class"] is not None)):
+        with banner:
+            st.error("Please fill all the required fields!")
+    else:
+        if st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"] == None:
+            model, _, _ = train_model(st.session_state["data"], st.session_state["Predict: model_class"].lower())
+            st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"] = model
+        else:
+            model = st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"]
+        st.session_state["prediction"] = predict({colnames.investor: st.session_state[f"Predict: {colnames.investor}"], colnames.province: st.session_state[f"Predict: {colnames.province}"], colnames.quantity: st.session_state[f"Predict: {colnames.quantity}"], colnames.closing_date: st.session_state[f"Predict: {colnames.closing_date}"], colnames.manufacturer: st.session_state[f"Predict: {colnames.manufacturer}"], colnames.country_origin: st.session_state[f"Predict: {colnames.country_origin}"]}, model)
 
 def generate_label_filter(cname: str):
     label_col, button_col = st.columns([5, 1], gap="xxlarge", vertical_alignment="center")
@@ -691,20 +704,133 @@ with right_col:
                     with class_space:
                         st.selectbox("Model class", ["Default", "Auto"], key=f"Predict: model_class")
                     with button_space:
-                        if st.form_submit_button("Train & predict", width="stretch"):
-                            filled = (st.session_state[f"Predict: {colnames.investor}"] is not None) and (st.session_state[f"Predict: {colnames.province}"] is not None) and (st.session_state[f"Predict: {colnames.quantity}"] is not None) and (st.session_state[f"Predict: {colnames.closing_date}"] is not None) and (st.session_state[f"Predict: {colnames.manufacturer}"] is not None) and (st.session_state[f"Predict: {colnames.country_origin}"] is not None) and (st.session_state[f"Predict: model_class"] is not None)
-                            if not filled:
-                                with banner:
-                                    st.error("Please fill all the required fields!")
-                            else:
-                                if st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"] == None:
-                                    model, _, _ = train_model(st.session_state["data"], st.session_state["Predict: model_class"].lower())
-                                    st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"] = model
-                                else:
-                                    model = st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"]
-                                dist = predict({colnames.investor: st.session_state[f"Predict: {colnames.investor}"], colnames.province: st.session_state[f"Predict: {colnames.province}"], colnames.quantity: st.session_state[f"Predict: {colnames.quantity}"], colnames.closing_date: st.session_state[f"Predict: {colnames.closing_date}"], colnames.manufacturer: st.session_state[f"Predict: {colnames.manufacturer}"], colnames.country_origin: st.session_state[f"Predict: {colnames.country_origin}"]}, model)
-                                print(dist)
+                        st.form_submit_button("Train & predict", on_click=handle_predict_click, width="stretch")
+                left_col, right_col = st.columns([1, 1])
+                if "prediction" in st.session_state and st.session_state["prediction"] != None:
+                    with left_col:
+                        st.subheader("Results on test dataset")
+                        metrics = st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"]["metrics"]
+                        st.markdown(f"**Mean absolute error (VND): {metrics["MAE"]:.3f}**")
+                        st.markdown(f"**Negative log likelihood: {metrics["NLL"]:.3f}**")
+                    with right_col:
+                        dist = st.session_state["prediction"]
 
-                                left_col, right_col = st.columns([1, 1])
-                                with left_col:
-                                    st.dataframe(model["metrics"])
+                        def to_scalar(value):
+                            arr = np.asarray(value)
+                            if arr.size == 0:
+                                return np.nan
+                            return float(arr.reshape(-1)[0])
+
+                        quantile_levels = [0.1, 0.25, 0.5, 0.75, 0.9]
+                        quantiles = {q: to_scalar(dist.ppf(q)) for q in quantile_levels}
+
+                        x_low = to_scalar(dist.ppf(0.001))
+                        x_high = to_scalar(dist.ppf(0.999))
+                        if not (np.isfinite(x_low) and np.isfinite(x_high)) or x_low >= x_high:
+                            x_low = quantiles[0.1]
+                            x_high = quantiles[0.9]
+                            pad = max((x_high - x_low) * 0.3, 1.0)
+                            x_low -= pad
+                            x_high += pad
+
+                        x_grid = np.linspace(x_low, x_high, 400)
+
+                        try:
+                            pdf_values = np.asarray(dist.pdf(x_grid), dtype=float).reshape(-1)
+                            if pdf_values.size != x_grid.size:
+                                raise ValueError("Unexpected pdf output shape")
+                        except Exception:
+                            pdf_values = np.array([to_scalar(dist.pdf(x)) for x in x_grid], dtype=float)
+
+                        valid = np.isfinite(pdf_values)
+                        if not valid.any():
+                            st.warning("Could not evaluate the distribution PDF for plotting.")
+                        else:
+                            density_df = pd.DataFrame({"x": x_grid[valid], "pdf": pdf_values[valid]})
+
+                            q_df = pd.DataFrame(
+                                {
+                                    "quantile": quantile_levels,
+                                    "x": [quantiles[q] for q in quantile_levels],
+                                }
+                            )
+                            q_df["label"] = q_df["quantile"].map(lambda q: f"q={q:.2f}")
+                            q_df["pdf"] = np.interp(q_df["x"], density_df["x"], density_df["pdf"])
+
+                            segment_edges = np.array([
+                                x_low,
+                                quantiles[0.1],
+                                quantiles[0.25],
+                                quantiles[0.5],
+                                quantiles[0.75],
+                                quantiles[0.9],
+                                x_high,
+                            ], dtype=float)
+                            for i in range(1, len(segment_edges)):
+                                if segment_edges[i] <= segment_edges[i - 1]:
+                                    segment_edges[i] = np.nextafter(segment_edges[i - 1], np.inf)
+
+                            segment_labels = [
+                                "<= q0.10",
+                                "q0.10 - q0.25",
+                                "q0.25 - q0.50",
+                                "q0.50 - q0.75",
+                                "q0.75 - q0.90",
+                                ">= q0.90",
+                            ]
+                            density_df["segment"] = pd.cut(
+                                density_df["x"], bins=segment_edges, labels=segment_labels, include_lowest=True
+                            )
+
+                            segment_scale = alt.Scale(
+                                domain=segment_labels,
+                                range=["#e8eef6", "#cddff1", "#96c0e6", "#5fa1d9", "#2e7fc5", "#15599b"],
+                            )
+
+                            density_chart = alt.Chart(density_df).mark_area(opacity=0.65).encode(
+                                x=alt.X("x:Q", title="Unit price (thousand VND)"),
+                                y=alt.Y("pdf:Q", title="Density"),
+                                color=alt.Color("segment:N", title="Distribution band", scale=segment_scale),
+                                tooltip=[
+                                    alt.Tooltip("x:Q", title="Unit price", format=",.0f"),
+                                    alt.Tooltip("pdf:Q", title="Density", format=".6f"),
+                                    alt.Tooltip("segment:N", title="Band"),
+                                ],
+                            )
+
+                            density_outline = alt.Chart(density_df).mark_line(color="#0b3c6f", strokeWidth=2).encode(
+                                x=alt.X("x:Q", title="Unit price (thousand VND)"),
+                                y=alt.Y("pdf:Q", title="Density"),
+                            )
+
+                            q_df["y0"] = 0.0
+
+                            q_rules = alt.Chart(q_df).mark_rule(strokeWidth=2, strokeDash=[6, 6], color="#1f2937").encode(
+                                x=alt.X("x:Q"),
+                                y=alt.Y("y0:Q"),
+                                y2=alt.Y2("pdf:Q"),
+                                tooltip=[
+                                    alt.Tooltip("label:N", title="Quantile"),
+                                    alt.Tooltip("x:Q", title="Value", format=",.0f"),
+                                ],
+                            )
+
+                            q_points = alt.Chart(q_df).mark_point(size=80, filled=True, color="#1f2937").encode(
+                                x=alt.X("x:Q"),
+                                y=alt.Y("pdf:Q"),
+                                tooltip=[
+                                    alt.Tooltip("label:N", title="Quantile"),
+                                    alt.Tooltip("x:Q", title="Value", format=",.0f"),
+                                    alt.Tooltip("pdf:Q", title="Density", format=".6f"),
+                                ],
+                            )
+
+                            st.subheader("Predicted winning bid price distribution")
+                            st.altair_chart(
+                                (density_chart + density_outline + q_rules + q_points)
+                                .properties(height=320)
+                                .configure_view(stroke=None)
+                                .configure_axis(labelColor="black", titleColor="black", labelFontSize=14, titleFontSize=14),
+                                width="stretch",
+                            )
+                        
