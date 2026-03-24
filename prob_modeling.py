@@ -15,6 +15,7 @@ import pandas as pd
 from xgboost import XGBRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
+from lightgbm import LGBMRegressor
 from sklearn import clone
 import copy
 from sklearn.model_selection import ParameterSampler
@@ -68,6 +69,21 @@ XGB_PARAM_GRID = {
 LR_PARAM_GRID = {
     "fit_intercept": [True],
 }
+
+LGBM_PARAM_GRID = {
+    "n_estimators": [100, 200, 300, 500, 700],
+    "learning_rate": [0.03, 0.05, 0.1],
+    "max_depth": [-1, 5, 8, 12, 20],
+    "num_leaves": [15, 31, 63, 127],
+    "min_child_samples": [5, 10, 20, 50],
+    "subsample": [0.6, 0.8, 1.0],
+    "colsample_bytree": [0.5, 0.8, 1.0],
+    "reg_alpha": [0.0, 0.1, 1.0],
+    "reg_lambda": [0.0, 0.1, 1.0],
+    "random_state": [42],
+    "n_jobs": [-1],
+}
+
 
 N_SEARCH = 30
 RANDOM_STATE = 0
@@ -744,7 +760,8 @@ def train_model(df, mode, need_prep=True):
         "HM": {},
         "LR": LR_PARAM_GRID,
         "RF": RF_PARAM_GRID,
-        "XGB": XGB_PARAM_GRID
+        "XGB": XGB_PARAM_GRID,
+        "LGBM": LGBM_PARAM_GRID
     }
 
     name_to_class_map_mean = {
@@ -752,6 +769,7 @@ def train_model(df, mode, need_prep=True):
         "LR": get_pipeline_wrap(preprocessor_mean, LinearRegression),
         "RF": get_pipeline_wrap(preprocessor_mean, RandomForestRegressor),
         "XGB": get_pipeline_wrap(preprocessor_mean, XGBRegressor),
+        "LGBM": get_pipeline_wrap(preprocessor_mean, LGBMRegressor)
     }
 
     name_to_class_map_resid = {
@@ -759,6 +777,7 @@ def train_model(df, mode, need_prep=True):
         "LR": get_pipeline_wrap(preprocessor_resid, LinearRegression),
         "RF": get_pipeline_wrap(preprocessor_resid, RandomForestRegressor),
         "XGB": get_pipeline_wrap(preprocessor_resid, XGBRegressor),
+        "LGBM": get_pipeline_wrap(preprocessor_resid, LGBMRegressor)
     }
 
     if mode == "default":
@@ -766,8 +785,8 @@ def train_model(df, mode, need_prep=True):
         resid_model_names = ["RF"]
 
     else:
-        mean_model_names = ["HM", "RF", "XGB"]
-        resid_model_names = ["RF", "XGB"]
+        mean_model_names = ["HM", "RF", "XGB", "LGBM"]
+        resid_model_names = ["RF", "XGB", "LGBM"]
 
     if need_prep:
         df = prep_df(df)
