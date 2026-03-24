@@ -39,7 +39,7 @@ FEATURES = [
 CAT_FEATURES = ["investor", "manufacturer", "country_of_origin", "province"]
 NUM_FEATURES = ["log_quantity", "year", "month"]
 TARGET = "unit_price"
-DATE_COL = "date"
+DATE_COL = "closing_date"
 
 RF_PARAM_GRID = {
     "n_estimators": [100, 200, 300, 500, 700],
@@ -248,7 +248,8 @@ class HierMeanFeatureSet:
 
         return out
     
-class ResidualDoubleCVSafe(ResidualDouble):
+class ResidualDoubleCVSafe(ResidualDouble): 
+    # safe for CV + HM feature transfo 
     def __init__(self,
         estimator,
         estimator_resid=None,
@@ -424,19 +425,15 @@ def get_cv_fn(target, features, n_splits=3):
             y_train = y.iloc[train_idx]
             y_test = y.iloc[test_idx]
 
-            # build train df with target
             train_df = X_train.copy()
             train_df[target] = y_train
 
-            # clone transformer (important!)
             hmt = HierMeanFeatureSet()
             hmt.fit(train_df)
 
-            # transform
             train_tr = hmt.transform_train(train_df)
             test_tr = hmt.transform_test(X_test)
 
-            # drop target from X
             X_train_tr = train_tr[features]
             X_test_tr = test_tr[features]
 
@@ -538,9 +535,8 @@ def train_mean_model(
 def prep_df(df, predict=False):
     df = df.copy()
     df["log_quantity"] = np.log1p(df["quantity"])
-    df["date"] = pd.to_datetime(df["closing_date"], dayfirst=True)
-    df["month"] = df["date"].dt.month
-    df["year"] = df["date"].dt.year
+    df["month"] = df["closing_date"].dt.month
+    df["year"] = df["closing_date"].dt.year
     if not predict:
         df["unit_price"] = df["unit_price"] / 1000
     return df
@@ -748,7 +744,7 @@ def train_model(df, mode, need_prep=True):
     train_df, val_df, test_df = get_train_val_test_split(df)
     best_model, mean_model_summary, full_model_summary = predict_winning_price_scale_model(
         train_df, val_df, test_df,
-        features=FEATURES+hier_mean_feats+[TARGET], 
+        features=FEATURES+hier_mean_feats+[TARGET], # target needed for HM model fitting, not used in prediction & and in other models 
         target=TARGET,
         mean_model_names=mean_model_names,
         resid_model_names=resid_model_names,
