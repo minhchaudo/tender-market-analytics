@@ -68,8 +68,8 @@ def handle_search_click():
     st.session_state[f"Filter: min {colnames.closing_date}"] = df[colnames.closing_date].min()
     st.session_state[f"Filter: max {colnames.closing_date}"] = df[colnames.closing_date].max()
 
-    st.session_state["model_default"] == None
-    st.session_state["model_auto"] == None
+    st.session_state["model_default"] = None
+    st.session_state["model_auto"] = None
 
 
 def generate_label_filter(cname: str):
@@ -703,4 +703,8 @@ with right_col:
                                 else:
                                     model = st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"]
                                 dist = predict({colnames.investor: st.session_state[f"Predict: {colnames.investor}"], colnames.province: st.session_state[f"Predict: {colnames.province}"], colnames.quantity: st.session_state[f"Predict: {colnames.quantity}"], colnames.closing_date: st.session_state[f"Predict: {colnames.closing_date}"], colnames.manufacturer: st.session_state[f"Predict: {colnames.manufacturer}"], colnames.country_origin: st.session_state[f"Predict: {colnames.country_origin}"]}, model)
-                                
+                                print(dist)
+
+                                left_col, right_col = st.columns([1, 1])
+                                with left_col:
+                                    st.dataframe(model["metrics"])
