@@ -1,13 +1,8 @@
 import streamlit as st
 import altair as alt
 import pandas as pd
-from datetime import datetime
-import numpy as np
 from query_logic import query, SQLCompileError
 
-# def query_db(query: str):
-#     print(query)
-#     return pd.read_csv("kit_test_df_clean.csv")
 
 class colnames:
     contractor_name = "contractor_name"
@@ -33,6 +28,7 @@ class colnames:
     manufacturer = "manufacturer"
     province = "province"
 
+
 def handle_search_click():
     query_str = st.session_state["text: query"].strip()
     if query_str == "":
@@ -54,27 +50,59 @@ def handle_search_click():
     st.session_state[f"Filter: {colnames.manufacturer}"] = set()
     st.session_state[f"Filter: {colnames.country_origin}"] = set()
     st.session_state[f"Filter: {colnames.region_origin}"] = set()
-    st.session_state[f"Filter: {colnames.quantity}"] = (df[colnames.quantity].min(), df[colnames.quantity].max())
-    st.session_state[f"Filter: {colnames.unit_price}"] = (df[colnames.unit_price].min(), df[colnames.unit_price].max())
-    st.session_state[f"Filter: {colnames.total_price}"] = (df[colnames.total_price].min(), df[colnames.total_price].max())
+    st.session_state[f"Filter: {colnames.quantity}"] = (
+        df[colnames.quantity].min(),
+        df[colnames.quantity].max(),
+    )
+    st.session_state[f"Filter: {colnames.unit_price}"] = (
+        df[colnames.unit_price].min(),
+        df[colnames.unit_price].max(),
+    )
+    st.session_state[f"Filter: {colnames.total_price}"] = (
+        df[colnames.total_price].min(),
+        df[colnames.total_price].max(),
+    )
     st.session_state[f"Filter: min {colnames.posting_date}"] = df[colnames.posting_date].min()
     st.session_state[f"Filter: max {colnames.posting_date}"] = df[colnames.posting_date].max()
     st.session_state[f"Filter: min {colnames.closing_date}"] = df[colnames.closing_date].min()
     st.session_state[f"Filter: max {colnames.closing_date}"] = df[colnames.closing_date].max()
+
 
 def generate_label_filter(cname: str):
     label_col, button_col = st.columns([5, 1], gap="xxlarge", vertical_alignment="center")
     with label_col:
         st.markdown(f"**Filter {cname.replace("_", " ")}**")
     with button_col:
-        st.button("🗑️", key=f"button: erase {cname}", help="Clear this filter", on_click=lambda: st.session_state[f"Filter: {cname}"].clear(), type="tertiary", use_container_width=True)
-    
+        st.button(
+            "🗑️",
+            key=f"button: erase {cname}",
+            help="Clear this filter",
+            on_click=lambda: st.session_state[f"Filter: {cname}"].clear(),
+            type="tertiary",
+            use_container_width=True,
+        )
+
     def handle_selectbox_change():
         st.session_state[f"Filter: {cname}"].add(st.session_state[f"selectbox: {cname}"])
         st.session_state[f"selectbox: {cname}"] = None
-    st.selectbox(f"Filter {cname.replace("_", " ")}", sorted(set(st.session_state["data"][cname])), key=f"selectbox: {cname}", index=None, placeholder=f"Select {cname.replace("_", " ")} to filter", label_visibility="collapsed", on_change=handle_selectbox_change)
 
-    st.pills("Current filters", sorted({"❌ " + s for s in st.session_state[f"Filter: {cname}"]}), key=f"pills: {cname}", label_visibility="collapsed", on_change=lambda: st.session_state[f"Filter: {cname}"].discard(st.session_state[f"pills: {cname}"][2:]))
+    st.selectbox(
+        f"Filter {cname.replace("_", " ")}",
+        sorted(set(st.session_state["data"][cname])),
+        key=f"selectbox: {cname}",
+        index=None,
+        placeholder=f"Select {cname.replace("_", " ")} to filter",
+        label_visibility="collapsed",
+        on_change=handle_selectbox_change,
+    )
+
+    st.pills(
+        "Current filters",
+        sorted({"❌ " + s for s in st.session_state[f"Filter: {cname}"]}),
+        key=f"pills: {cname}",
+        label_visibility="collapsed",
+        on_change=lambda: st.session_state[f"Filter: {cname}"].discard(st.session_state[f"pills: {cname}"][2:]),
+    )
 
 
 def generate_checkboxes(cname: str):
@@ -83,12 +111,24 @@ def generate_checkboxes(cname: str):
 
     st.markdown(f"**{cname.replace("_", " ")}**")
     for e in sorted(elems):
-        st.checkbox(e.replace("_", " "), key=f"checkbox: {cname}: {e}", value=e in st.session_state[f"Filter: {cname}"], on_change=lambda e=e: st.session_state[f"Filter: {cname}"].add(e) if st.session_state.get(f"checkbox: {cname}: {e}", False) else st.session_state[f"Filter: {cname}"].discard(e))
+        st.checkbox(
+            e.replace("_", " "),
+            key=f"checkbox: {cname}: {e}",
+            value=e in st.session_state[f"Filter: {cname}"],
+            on_change=lambda e=e: (st.session_state[f"Filter: {cname}"].add(e) if st.session_state.get(f"checkbox: {cname}: {e}", False) else st.session_state[f"Filter: {cname}"].discard(e)),
+        )
+
 
 def generate_slider(cname: str):
     df = st.session_state["data"]
 
-    st.slider(f"{cname.replace("_", " ").capitalize()}", min_value=df[cname].min(), max_value=df[cname].max(), key=f"Filter: {cname}")
+    st.slider(
+        f"{cname.replace("_", " ").capitalize()}",
+        min_value=df[cname].min(),
+        max_value=df[cname].max(),
+        key=f"Filter: {cname}",
+    )
+
 
 def generate_date_range(cname: str):
     df = st.session_state["data"]
@@ -96,9 +136,22 @@ def generate_date_range(cname: str):
     st.subheader(f"{cname.replace("_", " ").capitalize()}")
     left_col, right_col = st.columns([1, 1], gap="small")
     with left_col:
-        st.date_input("From", min_value=df[cname].min(), max_value=df[cname].max(), format="DD-MM-YYYY", key=f"Filter: min {cname}")
+        st.date_input(
+            "From",
+            min_value=df[cname].min(),
+            max_value=df[cname].max(),
+            format="DD-MM-YYYY",
+            key=f"Filter: min {cname}",
+        )
     with right_col:
-        st.date_input("To", min_value=df[cname].min(), max_value=df[cname].max(), format="DD-MM-YYYY", key=f"Filter: max {cname}")
+        st.date_input(
+            "To",
+            min_value=df[cname].min(),
+            max_value=df[cname].max(),
+            format="DD-MM-YYYY",
+            key=f"Filter: max {cname}",
+        )
+
 
 st.set_page_config(page_title="Tender Market Analytics", layout="wide")
 st.title("Tender Market Analytics", text_alignment="center")
@@ -107,7 +160,7 @@ with left_col:
     with st.container(height=650, border=True):
         with st.form("Query", border=False):
             st.text_area("Search query", height=200, key="text: query")
-            if "query_error" in st.session_state and st.session_state["query_error"] != None:
+            if "query_error" in st.session_state and st.session_state["query_error"] is not None:
                 if st.session_state["query_error"] == 1:
                     st.error("Please enter your query first!")
                 elif isinstance(st.session_state["query_error"], SQLCompileError):
@@ -137,21 +190,31 @@ with right_col:
                 st.info("No result. Try another query.")
             else:
                 raw_df = st.session_state["data"]
-                s_post = st.session_state[f"Filter: min {colnames.posting_date}"] if st.session_state[f"Filter: min {colnames.posting_date}"] != None else raw_df[colnames.posting_date].min()
-                e_post = st.session_state[f"Filter: max {colnames.posting_date}"] if st.session_state[f"Filter: max {colnames.posting_date}"] != None else raw_df[colnames.posting_date].max()
-                s_bid = st.session_state[f"Filter: min {colnames.closing_date}"] if st.session_state[f"Filter: min {colnames.closing_date}"] != None else raw_df[colnames.closing_date].min()
-                e_bid = st.session_state[f"Filter: max {colnames.closing_date}"] if st.session_state[f"Filter: max {colnames.closing_date}"] != None else raw_df[colnames.closing_date].max()
+                s_post = st.session_state[f"Filter: min {colnames.posting_date}"] if st.session_state[f"Filter: min {colnames.posting_date}"] is not None else raw_df[colnames.posting_date].min()
+                e_post = st.session_state[f"Filter: max {colnames.posting_date}"] if st.session_state[f"Filter: max {colnames.posting_date}"] is not None else raw_df[colnames.posting_date].max()
+                s_bid = st.session_state[f"Filter: min {colnames.closing_date}"] if st.session_state[f"Filter: min {colnames.closing_date}"] is not None else raw_df[colnames.closing_date].min()
+                e_bid = st.session_state[f"Filter: max {colnames.closing_date}"] if st.session_state[f"Filter: max {colnames.closing_date}"] is not None else raw_df[colnames.closing_date].max()
                 df = raw_df[
-                    (raw_df[colnames.investor].isin(st.session_state[f"Filter: {colnames.investor}"]) if st.session_state[f"Filter: {colnames.investor}"] else True) &
-                    (raw_df[colnames.contractor_name].isin(st.session_state[f"Filter: {colnames.contractor_name}"]) if st.session_state[f"Filter: {colnames.contractor_name}"] else True) &
-                    (raw_df[colnames.manufacturer].isin(st.session_state[f"Filter: {colnames.manufacturer}"]) if st.session_state[f"Filter: {colnames.manufacturer}"] else True) &
-                    (raw_df[colnames.country_origin].isin(st.session_state[f"Filter: {colnames.country_origin}"]) if st.session_state[f"Filter: {colnames.country_origin}"] else True) &
-                    (raw_df[colnames.region_origin].isin(st.session_state[f"Filter: {colnames.region_origin}"]) if st.session_state[f"Filter: {colnames.region_origin}"] else True) &
-                    (raw_df[colnames.quantity].between(*st.session_state[f"Filter: {colnames.quantity}"])) &
-                    (raw_df[colnames.unit_price].between(*st.session_state[f"Filter: {colnames.unit_price}"])) &
-                    (raw_df[colnames.total_price].between(*st.session_state[f"Filter: {colnames.total_price}"])) &
-                    (raw_df[colnames.posting_date].between(pd.Timestamp(s_post), pd.Timestamp(e_post) + pd.Timedelta(seconds=1))) &
-                    (raw_df[colnames.closing_date].between(pd.Timestamp(s_bid), pd.Timestamp(e_bid) + pd.Timedelta(seconds=1)))
+                    (raw_df[colnames.investor].isin(st.session_state[f"Filter: {colnames.investor}"]) if st.session_state[f"Filter: {colnames.investor}"] else True)
+                    & (raw_df[colnames.contractor_name].isin(st.session_state[f"Filter: {colnames.contractor_name}"]) if st.session_state[f"Filter: {colnames.contractor_name}"] else True)
+                    & (raw_df[colnames.manufacturer].isin(st.session_state[f"Filter: {colnames.manufacturer}"]) if st.session_state[f"Filter: {colnames.manufacturer}"] else True)
+                    & (raw_df[colnames.country_origin].isin(st.session_state[f"Filter: {colnames.country_origin}"]) if st.session_state[f"Filter: {colnames.country_origin}"] else True)
+                    & (raw_df[colnames.region_origin].isin(st.session_state[f"Filter: {colnames.region_origin}"]) if st.session_state[f"Filter: {colnames.region_origin}"] else True)
+                    & (raw_df[colnames.quantity].between(*st.session_state[f"Filter: {colnames.quantity}"]))
+                    & (raw_df[colnames.unit_price].between(*st.session_state[f"Filter: {colnames.unit_price}"]))
+                    & (raw_df[colnames.total_price].between(*st.session_state[f"Filter: {colnames.total_price}"]))
+                    & (
+                        raw_df[colnames.posting_date].between(
+                            pd.Timestamp(s_post),
+                            pd.Timestamp(e_post) + pd.Timedelta(seconds=1),
+                        )
+                    )
+                    & (
+                        raw_df[colnames.closing_date].between(
+                            pd.Timestamp(s_bid),
+                            pd.Timestamp(e_bid) + pd.Timedelta(seconds=1),
+                        )
+                    )
                 ]
                 if df.empty:
                     st.info("No result. Try adjusting your filters.")
@@ -162,32 +225,54 @@ with right_col:
                         st.subheader("Distribution of unit prices")
 
                         bins = 100
-                        bars = alt.Chart(df).mark_bar().encode(
-                            x=alt.X(colnames.unit_price, bin=alt.Bin(maxbins=bins), title="Unit price (million VND)", scale=alt.Scale(domainMin=0)),
-                            y=alt.Y("count()", title="Count")
+                        bars = (
+                            alt.Chart(df)
+                            .mark_bar()
+                            .encode(
+                                x=alt.X(
+                                    colnames.unit_price,
+                                    bin=alt.Bin(maxbins=bins),
+                                    title="Unit price (million VND)",
+                                    scale=alt.Scale(domainMin=0),
+                                ),
+                                y=alt.Y("count()", title="Count"),
+                            )
                         )
-                        background = bars.encode(
-                            tooltip=[
-                                alt.Tooltip('mean:Q', title='Mean (million VND)'),
-                                alt.Tooltip('std:Q', title='Standard deviation (million VND)'),
-                                alt.Tooltip('min:Q', title='Min (million VND)'),
-                                alt.Tooltip('q1:Q', title='Q1 (million VND)'),
-                                alt.Tooltip('q3:Q', title='Q3 (million VND)'),
-                                alt.Tooltip('max:Q', title='Max (million VND)')
-                            ]
-                        ).transform_calculate(
-                            mean=f"'{df[colnames.unit_price].mean():.3f}'",
-                            std=f"'{df[colnames.unit_price].std():.3f}'",
-                            min=f"'{df[colnames.unit_price].min():.3f}'",
-                            q1=f"'{df[colnames.unit_price].quantile(0.25):.3f}'",
-                            q3=f"'{df[colnames.unit_price].quantile(0.75):.3f}'",
-                            max=f"'{df[colnames.unit_price].max():.3f}'"
-                        ).add_params(alt.selection_point(nearest=True))
-                        bars = bars.add_params(alt.selection_point(on="mouseover", empty='none'))
+                        background = (
+                            bars.encode(
+                                tooltip=[
+                                    alt.Tooltip("mean:Q", title="Mean (million VND)"),
+                                    alt.Tooltip(
+                                        "std:Q",
+                                        title="Standard deviation (million VND)",
+                                    ),
+                                    alt.Tooltip("min:Q", title="Min (million VND)"),
+                                    alt.Tooltip("q1:Q", title="Q1 (million VND)"),
+                                    alt.Tooltip("q3:Q", title="Q3 (million VND)"),
+                                    alt.Tooltip("max:Q", title="Max (million VND)"),
+                                ]
+                            )
+                            .transform_calculate(
+                                mean=f"'{df[colnames.unit_price].mean():.3f}'",
+                                std=f"'{df[colnames.unit_price].std():.3f}'",
+                                min=f"'{df[colnames.unit_price].min():.3f}'",
+                                q1=f"'{df[colnames.unit_price].quantile(0.25):.3f}'",
+                                q3=f"'{df[colnames.unit_price].quantile(0.75):.3f}'",
+                                max=f"'{df[colnames.unit_price].max():.3f}'",
+                            )
+                            .add_params(alt.selection_point(nearest=True))
+                        )
+                        bars = bars.add_params(alt.selection_point(on="mouseover", empty="none"))
 
                         st.altair_chart(
-                            (background + bars).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(
-                                labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16
+                            (background + bars)
+                            .properties(height=alt.Step(36))
+                            .configure_view(stroke=None)
+                            .configure_axis(
+                                labelColor="black",
+                                titleColor="black",
+                                labelFontSize=16,
+                                titleFontSize=16,
                             ),
                             width="stretch",
                         )
@@ -195,45 +280,162 @@ with right_col:
                         st.subheader("Top contractors")
 
                         data = df.groupby(colnames.contractor_name, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(5)
-                        st.altair_chart(alt.Chart(data).mark_bar().encode(
-                                x=alt.X(colnames.total_price, title="Total price (billion VND)"),
-                                y=alt.Y(colnames.contractor_name, title="Contractor", sort="-x", axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None)),
-                            ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
+                        st.altair_chart(
+                            alt.Chart(data)
+                            .mark_bar()
+                            .encode(
+                                x=alt.X(
+                                    colnames.total_price,
+                                    title="Total price (billion VND)",
+                                ),
+                                y=alt.Y(
+                                    colnames.contractor_name,
+                                    title="Contractor",
+                                    sort="-x",
+                                    axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None),
+                                ),
+                            )
+                            .properties(height=alt.Step(36))
+                            .configure_view(stroke=None)
+                            .configure_axis(
+                                labelColor="black",
+                                titleColor="black",
+                                labelFontSize=16,
+                                titleFontSize=16,
+                            ),
+                            width="stretch",
+                        )
                     with st.container():
                         st.subheader("Top investor")
 
                         data = df.groupby(colnames.investor, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(5)
-                        st.altair_chart(alt.Chart(data).mark_bar().encode(
-                                x=alt.X(colnames.total_price, title="Total price (billion VND)"),
-                                y=alt.Y(colnames.investor, title="Investor", sort="-x", axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None))
-                            ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
+                        st.altair_chart(
+                            alt.Chart(data)
+                            .mark_bar()
+                            .encode(
+                                x=alt.X(
+                                    colnames.total_price,
+                                    title="Total price (billion VND)",
+                                ),
+                                y=alt.Y(
+                                    colnames.investor,
+                                    title="Investor",
+                                    sort="-x",
+                                    axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None),
+                                ),
+                            )
+                            .properties(height=alt.Step(36))
+                            .configure_view(stroke=None)
+                            .configure_axis(
+                                labelColor="black",
+                                titleColor="black",
+                                labelFontSize=16,
+                                titleFontSize=16,
+                            ),
+                            width="stretch",
+                        )
                     with st.container():
                         st.subheader("Unit price by contractor")
 
                         top_bidder = set(df.groupby(colnames.contractor_name, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(10)[colnames.contractor_name])
                         data = df[df[colnames.contractor_name].isin(top_bidder)]
-                        st.altair_chart(alt.Chart(data).mark_boxplot().encode(
-                                x=alt.X(colnames.unit_price, title="Unit price (million VND)"), 
-                                y=alt.Y(colnames.contractor_name, title="Contractor", sort=alt.EncodingSortField(field=colnames.unit_price, op="median", order="descending"), axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None)),
-                            ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
+                        st.altair_chart(
+                            alt.Chart(data)
+                            .mark_boxplot()
+                            .encode(
+                                x=alt.X(
+                                    colnames.unit_price,
+                                    title="Unit price (million VND)",
+                                ),
+                                y=alt.Y(
+                                    colnames.contractor_name,
+                                    title="Contractor",
+                                    sort=alt.EncodingSortField(
+                                        field=colnames.unit_price,
+                                        op="median",
+                                        order="descending",
+                                    ),
+                                    axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None),
+                                ),
+                            )
+                            .properties(height=alt.Step(36))
+                            .configure_view(stroke=None)
+                            .configure_axis(
+                                labelColor="black",
+                                titleColor="black",
+                                labelFontSize=16,
+                                titleFontSize=16,
+                            ),
+                            width="stretch",
+                        )
                     with st.container():
                         st.subheader("Unit price by origin")
 
                         top_origin = set(df.groupby(colnames.country_origin, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(10)[colnames.country_origin])
                         data = df[df[colnames.country_origin].isin(top_origin)]
-                        st.altair_chart(alt.Chart(data).mark_boxplot().encode(
-                                x=alt.X(colnames.unit_price, title="Unit price (million VND)"), 
-                                y=alt.Y(colnames.country_origin, title="Origin", sort=alt.EncodingSortField(field=colnames.unit_price, op="median", order="descending"), axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None))
-                            ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
+                        st.altair_chart(
+                            alt.Chart(data)
+                            .mark_boxplot()
+                            .encode(
+                                x=alt.X(
+                                    colnames.unit_price,
+                                    title="Unit price (million VND)",
+                                ),
+                                y=alt.Y(
+                                    colnames.country_origin,
+                                    title="Origin",
+                                    sort=alt.EncodingSortField(
+                                        field=colnames.unit_price,
+                                        op="median",
+                                        order="descending",
+                                    ),
+                                    axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None),
+                                ),
+                            )
+                            .properties(height=alt.Step(36))
+                            .configure_view(stroke=None)
+                            .configure_axis(
+                                labelColor="black",
+                                titleColor="black",
+                                labelFontSize=16,
+                                titleFontSize=16,
+                            ),
+                            width="stretch",
+                        )
                     with st.container():
                         st.subheader("Unit price by manufacturer")
 
                         top_origin = set(df.groupby(colnames.manufacturer, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(10)[colnames.manufacturer])
                         data = df[df[colnames.manufacturer].isin(top_origin)]
-                        st.altair_chart(alt.Chart(data).mark_boxplot().encode(
-                                x=alt.X(colnames.unit_price, title="Unit price (million VND)"), 
-                                y=alt.Y(colnames.manufacturer, title="Manufacturer", sort=alt.EncodingSortField(field=colnames.unit_price, op="median", order="descending"), axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None))
-                            ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
+                        st.altair_chart(
+                            alt.Chart(data)
+                            .mark_boxplot()
+                            .encode(
+                                x=alt.X(
+                                    colnames.unit_price,
+                                    title="Unit price (million VND)",
+                                ),
+                                y=alt.Y(
+                                    colnames.manufacturer,
+                                    title="Manufacturer",
+                                    sort=alt.EncodingSortField(
+                                        field=colnames.unit_price,
+                                        op="median",
+                                        order="descending",
+                                    ),
+                                    axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None),
+                                ),
+                            )
+                            .properties(height=alt.Step(36))
+                            .configure_view(stroke=None)
+                            .configure_axis(
+                                labelColor="black",
+                                titleColor="black",
+                                labelFontSize=16,
+                                titleFontSize=16,
+                            ),
+                            width="stretch",
+                        )
                     with st.container():
                         st.subheader("Total value by country of origin")
 
@@ -241,15 +443,55 @@ with right_col:
                         top9 = data_by_origin.head(9)
                         rest = data_by_origin.iloc[9:][colnames.total_price].sum()
 
-                        data = pd.concat([top9, pd.DataFrame([{colnames.country_origin: "Others", colnames.total_price: rest}])], ignore_index=True) if rest > 0 else top9
-                        st.altair_chart(alt.Chart(data).mark_arc().encode(
-                            theta=alt.Theta(colnames.total_price, title="Total price", sort="x"),
-                            color=alt.Color(colnames.country_origin, title="Country of origin", legend=alt.Legend(title="Country of origin", labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16)),
-                            order=alt.Order(colnames.total_price, sort="ascending"),
-                            tooltip=[
-                                alt.Tooltip(colnames.country_origin, title="Country of origin"),
-                                alt.Tooltip(colnames.total_price, title="Total price", format=",.3f")
-                            ]), width="stretch")
+                        data = (
+                            pd.concat(
+                                [
+                                    top9,
+                                    pd.DataFrame(
+                                        [
+                                            {
+                                                colnames.country_origin: "Others",
+                                                colnames.total_price: rest,
+                                            }
+                                        ]
+                                    ),
+                                ],
+                                ignore_index=True,
+                            )
+                            if rest > 0
+                            else top9
+                        )
+                        st.altair_chart(
+                            alt.Chart(data)
+                            .mark_arc()
+                            .encode(
+                                theta=alt.Theta(colnames.total_price, title="Total price", sort="x"),
+                                color=alt.Color(
+                                    colnames.country_origin,
+                                    title="Country of origin",
+                                    legend=alt.Legend(
+                                        title="Country of origin",
+                                        labelColor="black",
+                                        titleColor="black",
+                                        labelFontSize=16,
+                                        titleFontSize=16,
+                                    ),
+                                ),
+                                order=alt.Order(colnames.total_price, sort="ascending"),
+                                tooltip=[
+                                    alt.Tooltip(
+                                        colnames.country_origin,
+                                        title="Country of origin",
+                                    ),
+                                    alt.Tooltip(
+                                        colnames.total_price,
+                                        title="Total price",
+                                        format=",.3f",
+                                    ),
+                                ],
+                            ),
+                            width="stretch",
+                        )
                     with st.container():
                         st.subheader("Total value by region of origin")
 
@@ -257,15 +499,51 @@ with right_col:
                         top9 = data_by_origin.head(9)
                         rest = data_by_origin.iloc[9:][colnames.total_price].sum()
 
-                        data = pd.concat([top9, pd.DataFrame([{colnames.region_origin: "Others", colnames.total_price: rest}])], ignore_index=True) if rest > 0 else top9
-                        st.altair_chart(alt.Chart(data).mark_arc().encode(
-                            theta=alt.Theta(colnames.total_price, title="Total price", sort="x"),
-                            color=alt.Color(colnames.region_origin, legend=alt.Legend(title="Region of origin", labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16)),
-                            order=alt.Order(colnames.total_price, sort="ascending"),
-                            tooltip=[
-                                alt.Tooltip(colnames.region_origin, title="Region of origin"),
-                                alt.Tooltip(colnames.total_price, title="Total price", format=",.3f")
-                            ]), width="stretch")
+                        data = (
+                            pd.concat(
+                                [
+                                    top9,
+                                    pd.DataFrame(
+                                        [
+                                            {
+                                                colnames.region_origin: "Others",
+                                                colnames.total_price: rest,
+                                            }
+                                        ]
+                                    ),
+                                ],
+                                ignore_index=True,
+                            )
+                            if rest > 0
+                            else top9
+                        )
+                        st.altair_chart(
+                            alt.Chart(data)
+                            .mark_arc()
+                            .encode(
+                                theta=alt.Theta(colnames.total_price, title="Total price", sort="x"),
+                                color=alt.Color(
+                                    colnames.region_origin,
+                                    legend=alt.Legend(
+                                        title="Region of origin",
+                                        labelColor="black",
+                                        titleColor="black",
+                                        labelFontSize=16,
+                                        titleFontSize=16,
+                                    ),
+                                ),
+                                order=alt.Order(colnames.total_price, sort="ascending"),
+                                tooltip=[
+                                    alt.Tooltip(colnames.region_origin, title="Region of origin"),
+                                    alt.Tooltip(
+                                        colnames.total_price,
+                                        title="Total price",
+                                        format=",.3f",
+                                    ),
+                                ],
+                            ),
+                            width="stretch",
+                        )
                     with st.container():
                         st.subheader("Total value by manufacturer")
 
@@ -273,15 +551,51 @@ with right_col:
                         top9 = data_by_origin.head(9)
                         rest = data_by_origin.iloc[9:][colnames.total_price].sum()
 
-                        data = pd.concat([top9, pd.DataFrame([{colnames.manufacturer: "Others", colnames.total_price: rest}])], ignore_index=True) if rest > 0 else top9
-                        st.altair_chart(alt.Chart(data).mark_arc().encode(
-                            theta=alt.Theta(colnames.total_price, title="Total price", sort="x"),
-                            color=alt.Color(colnames.manufacturer, legend=alt.Legend(title="Manufacturer", labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16)),
-                            order=alt.Order(colnames.total_price, sort="ascending"),
-                            tooltip=[
-                                alt.Tooltip(colnames.manufacturer, title="Manufacturer"),
-                                alt.Tooltip(colnames.total_price, title="Total price", format=",.3f")
-                            ]), width="stretch")
+                        data = (
+                            pd.concat(
+                                [
+                                    top9,
+                                    pd.DataFrame(
+                                        [
+                                            {
+                                                colnames.manufacturer: "Others",
+                                                colnames.total_price: rest,
+                                            }
+                                        ]
+                                    ),
+                                ],
+                                ignore_index=True,
+                            )
+                            if rest > 0
+                            else top9
+                        )
+                        st.altair_chart(
+                            alt.Chart(data)
+                            .mark_arc()
+                            .encode(
+                                theta=alt.Theta(colnames.total_price, title="Total price", sort="x"),
+                                color=alt.Color(
+                                    colnames.manufacturer,
+                                    legend=alt.Legend(
+                                        title="Manufacturer",
+                                        labelColor="black",
+                                        titleColor="black",
+                                        labelFontSize=16,
+                                        titleFontSize=16,
+                                    ),
+                                ),
+                                order=alt.Order(colnames.total_price, sort="ascending"),
+                                tooltip=[
+                                    alt.Tooltip(colnames.manufacturer, title="Manufacturer"),
+                                    alt.Tooltip(
+                                        colnames.total_price,
+                                        title="Total price",
+                                        format=",.3f",
+                                    ),
+                                ],
+                            ),
+                            width="stretch",
+                        )
     with tab2:
         with st.container(height=600, border=True):
             if not "data" in st.session_state:
@@ -294,16 +608,40 @@ with right_col:
                     banner = st.container()
                     left_col, right_col = st.columns([1, 1], gap="large")
                     with left_col:
-                        st.selectbox(colnames.investor, sorted(set(st.session_state["data"][colnames.investor]) | {"Other"}), index=None, key=f"Predict: {colnames.investor}")
-                        st.selectbox("Province", sorted(set(st.session_state["data"][colnames.province]) | {"Other"}), index=None, key=f"Predict: {colnames.province}")
+                        st.selectbox(
+                            colnames.investor,
+                            sorted(set(st.session_state["data"][colnames.investor]) | {"Other"}),
+                            index=None,
+                            key=f"Predict: {colnames.investor}",
+                        )
+                        st.selectbox(
+                            "Province",
+                            sorted(set(st.session_state["data"][colnames.province]) | {"Other"}),
+                            index=None,
+                            key=f"Predict: {colnames.province}",
+                        )
                         inner_left_col, inner_right_col = st.columns([1, 1], gap="medium")
                         with inner_left_col:
-                            st.number_input(colnames.quantity, key=f"Predict: {colnames.quantity}", min_value=1)
+                            st.number_input(
+                                colnames.quantity,
+                                key=f"Predict: {colnames.quantity}",
+                                min_value=1,
+                            )
                         with inner_right_col:
                             st.date_input("Bidding date", key=f"Predict: {colnames.posting_date}")
                     with right_col:
-                        st.selectbox(colnames.manufacturer, sorted(set(st.session_state["data"][colnames.manufacturer]) | {"Other"}), index=None, key=f"Predict: {colnames.manufacturer}")
-                        st.selectbox("Country of origin", sorted(set(st.session_state["data"][colnames.country_origin]) | {"Other"}), index=None, key=f"Predict: {colnames.country_origin}")
+                        st.selectbox(
+                            colnames.manufacturer,
+                            sorted(set(st.session_state["data"][colnames.manufacturer]) | {"Other"}),
+                            index=None,
+                            key=f"Predict: {colnames.manufacturer}",
+                        )
+                        st.selectbox(
+                            "Country of origin",
+                            sorted(set(st.session_state["data"][colnames.country_origin]) | {"Other"}),
+                            index=None,
+                            key=f"Predict: {colnames.country_origin}",
+                        )
                     _, button_space, _ = st.columns([1, 1, 1], gap="large")
                     with button_space:
                         if st.form_submit_button("Search", width="stretch"):
