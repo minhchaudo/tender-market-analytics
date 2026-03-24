@@ -103,6 +103,9 @@ def handle_predict_click():
             },
             model,
         )
+        print("=============================================")
+        print(st.session_state["prediction"])
+        print("=============================================")
 
 
 def generate_label_filter(cname: str):
@@ -815,29 +818,36 @@ with right_col:
                             return float(arr.reshape(-1)[0])
 
                         quantile_levels = [0.1, 0.25, 0.5, 0.75, 0.9]
-                        quantiles = {q: to_scalar(dist.ppf(q)) for q in quantile_levels}
-                        quantiles_non_negative = {q: max(0.0, quantiles[q]) for q in quantile_levels}
+                        quantiles_log = {q: to_scalar(dist.ppf(q)) for q in quantile_levels}
 
-                        x_low = 0.0
-                        x_high = to_scalar(dist.ppf(0.999))
-                        if not np.isfinite(x_high) or x_high <= x_low:
-                            x_high = max(quantiles_non_negative[0.9], quantiles_non_negative[0.5], 1.0)
-                        if x_high <= x_low:
-                            x_high = x_low + 1.0
-                        if not (np.isfinite(x_low) and np.isfinite(x_high)) or x_low >= x_high:
-                            x_low = 0.0
-                            x_high = max(quantiles_non_negative[0.9], quantiles_non_negative[0.5], 1.0)
-                            pad = max((x_high - x_low) * 0.3, 1.0)
-                            x_high += pad
+                        def exp_safe(v):
+                            return float(np.exp(np.clip(v, -700, 700)))
 
-                        x_grid = np.linspace(x_low, x_high, 400)
+                        quantiles = {q: exp_safe(quantiles_log[q]) for q in quantile_levels}
+                        mu_log = to_scalar(getattr(dist, "mu", np.nan))
+                        sigma_log = to_scalar(getattr(dist, "sigma", np.nan))
+                        mean_original = np.exp(mu_log + 0.5 * (sigma_log ** 2)) if np.isfinite(mu_log) and np.isfinite(sigma_log) else np.nan
+
+                        y_low = to_scalar(dist.ppf(0.001))
+                        y_high = to_scalar(dist.ppf(0.999))
+                        if not (np.isfinite(y_low) and np.isfinite(y_high)) or y_low >= y_high:
+                            y_low = quantiles_log[0.1]
+                            y_high = quantiles_log[0.9]
+                            if not (np.isfinite(y_low) and np.isfinite(y_high)) or y_low >= y_high:
+                                y_low, y_high = -1.0, 1.0
+
+                        y_grid = np.linspace(y_low, y_high, 400)
+                        x_grid = np.exp(np.clip(y_grid, -700, 700))
 
                         try:
-                            pdf_values = np.asarray(dist.pdf(x_grid), dtype=float).reshape(-1)
-                            if pdf_values.size != x_grid.size:
+                            pdf_y = np.asarray(dist.pdf(y_grid), dtype=float).reshape(-1)
+                            if pdf_y.size != y_grid.size:
                                 raise ValueError("Unexpected pdf output shape")
                         except Exception:
-                            pdf_values = np.array([to_scalar(dist.pdf(x)) for x in x_grid], dtype=float)
+                            pdf_y = np.array([to_scalar(dist.pdf(y)) for y in y_grid], dtype=float)
+
+                        with np.errstate(divide="ignore", invalid="ignore"):
+                            pdf_values = pdf_y / x_grid
 
                         valid = np.isfinite(pdf_values)
                         if not valid.any():
@@ -845,57 +855,27 @@ with right_col:
                         else:
                             density_df = pd.DataFrame({"x": x_grid[valid], "pdf": pdf_values[valid]})
 
+                            x_low = 0.0
+                            x_high = max(float(density_df["x"].max()), quantiles[0.9], quantiles[0.5], 1.0)
+
                             q_df = pd.DataFrame(
                                 {
                                     "quantile": quantile_levels,
-                                    "x": [quantiles_non_negative[q] for q in quantile_levels],
+                                    "x": [quantiles[q] for q in quantile_levels],
                                 }
                             )
                             q_df["label"] = q_df["quantile"].map(lambda q: f"q={q:.2f}")
                             q_df["pdf"] = np.interp(q_df["x"], density_df["x"], density_df["pdf"])
 
-                            segment_edges = np.array(
-                                [
-                                    x_low,
-                                    quantiles_non_negative[0.1],
-                                    quantiles_non_negative[0.25],
-                                    quantiles_non_negative[0.5],
-                                    quantiles_non_negative[0.75],
-                                    quantiles_non_negative[0.9],
-                                    x_high,
-                                ],
-                                dtype=float,
-                            )
-                            for i in range(1, len(segment_edges)):
-                                if segment_edges[i] <= segment_edges[i - 1]:
-                                    segment_edges[i] = np.nextafter(segment_edges[i - 1], np.inf)
-
-                            segment_labels = [
-                                "<= q0.10",
-                                "q0.10 - q0.25",
-                                "q0.25 - q0.50",
-                                "q0.50 - q0.75",
-                                "q0.75 - q0.90",
-                                ">= q0.90",
-                            ]
-                            density_df["segment"] = pd.cut(density_df["x"], bins=segment_edges, labels=segment_labels, include_lowest=True)
-
-                            segment_scale = alt.Scale(
-                                domain=segment_labels,
-                                range=["#e8eef6", "#cddff1", "#96c0e6", "#5fa1d9", "#2e7fc5", "#15599b"],
-                            )
-
                             density_chart = (
                                 alt.Chart(density_df)
-                                .mark_area(opacity=0.65)
+                                .mark_area(opacity=0.45, color="#9db7d5")
                                 .encode(
                                     x=alt.X("x:Q", title="Unit price (thousand VND)"),
                                     y=alt.Y("pdf:Q", title="Density"),
-                                    color=alt.Color("segment:N", title="Distribution band", scale=segment_scale),
                                     tooltip=[
                                         alt.Tooltip("x:Q", title="Unit price", format=",.3f"),
                                         alt.Tooltip("pdf:Q", title="Density", format=".6f"),
-                                        alt.Tooltip("segment:N", title="Band"),
                                     ],
                                 )
                             )
@@ -939,9 +919,21 @@ with right_col:
                                 )
                             )
 
+                            q_labels = (
+                                alt.Chart(q_df)
+                                .mark_text(align="left", baseline="middle", dx=8, color="#1f2937", fontSize=12)
+                                .encode(
+                                    x=alt.X("x:Q"),
+                                    y=alt.Y("pdf:Q"),
+                                    text=alt.Text("label:N"),
+                                )
+                            )
+
                             st.subheader("Predicted winning bid price distribution")
+                            if np.isfinite(mean_original):
+                                st.markdown(f"**Mean (original scale): {mean_original:,.3f}**")
                             st.altair_chart(
-                                (density_chart + density_outline + q_rules + q_points)
+                                (density_chart + density_outline + q_rules + q_points + q_labels)
                                 .properties(height=320)
                                 .configure_view(stroke=None)
                                 .configure_axis(labelColor="black", titleColor="black", labelFontSize=14, titleFontSize=14),
