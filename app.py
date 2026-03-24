@@ -87,25 +87,7 @@ def handle_predict_click():
         with banner:
             st.error("Please fill all the required fields!")
     else:
-        if st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"] == None:
-            model, _, _ = train_model(st.session_state["data"], st.session_state["Predict: model_class"].lower())
-            st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"] = model
-        else:
-            model = st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"]
-        st.session_state["prediction"] = predict(
-            {
-                colnames.investor: st.session_state[f"Predict: {colnames.investor}"],
-                colnames.province: st.session_state[f"Predict: {colnames.province}"],
-                colnames.quantity: st.session_state[f"Predict: {colnames.quantity}"],
-                colnames.closing_date: st.session_state[f"Predict: {colnames.closing_date}"],
-                colnames.manufacturer: st.session_state[f"Predict: {colnames.manufacturer}"],
-                colnames.country_origin: st.session_state[f"Predict: {colnames.country_origin}"],
-            },
-            model,
-        )
-        print("=============================================")
-        print(st.session_state["prediction"])
-        print("=============================================")
+        st.session_state["Predict it"] = True
 
 
 def generate_label_filter(cname: str):
@@ -795,19 +777,44 @@ with right_col:
                             index=None,
                             key=f"Predict: {colnames.country_origin}",
                         )
+                        st.number_input(
+                                "Cost (VND)",
+                                key=f"Predict: cost",
+                                min_value=0,
+                            )
                     banner = st.container()
                     _, class_space, button_space, _ = st.columns([2, 1, 2, 3], gap="small", vertical_alignment="bottom")
                     with class_space:
                         st.selectbox("Model class", ["Default", "Auto"], key=f"Predict: model_class")
                     with button_space:
                         st.form_submit_button("Train & predict", on_click=handle_predict_click, width="stretch")
-                left_col, right_col = st.columns([1, 1])
+                
+                progress_space = st.empty()
+                if st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"] != None:
+                    model, _, _ = train_model(st.session_state["data"], st.session_state["Predict: model_class"].lower())
+                    st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"] = model
+                else:
+                    model = st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"]
+                st.session_state["prediction"] = predict(
+                    {
+                        colnames.investor: st.session_state[f"Predict: {colnames.investor}"],
+                        colnames.province: st.session_state[f"Predict: {colnames.province}"],
+                        colnames.quantity: st.session_state[f"Predict: {colnames.quantity}"],
+                        colnames.closing_date: st.session_state[f"Predict: {colnames.closing_date}"],
+                        colnames.manufacturer: st.session_state[f"Predict: {colnames.manufacturer}"],
+                        colnames.country_origin: st.session_state[f"Predict: {colnames.country_origin}"],
+                    },
+                    model,
+                )
+
+                left_col, right_col = st.columns([3, 7])
                 if "prediction" in st.session_state and st.session_state["prediction"] != None:
                     with left_col:
                         st.subheader("Results on test dataset")
                         metrics = st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"]["metrics"]
-                        st.markdown(f"**Mean absolute error (VND): {metrics["MAE"]:.3f}**")
-                        st.markdown(f"**Negative log likelihood: {metrics["NLL"]:.3f}**")
+                        st.markdown(f"**Mean absolute error: {metrics["MAE"]*1000:,.0f} VND**")
+                        st.markdown(f"**Coverage 50%: {metrics["Coverage_50"]*100:.1f}%**")
+                        st.markdown(f"**Coverage 90%: {metrics["Coverage_90"]*100:.1f}%**")
                     with right_col:
                         dist = st.session_state["prediction"]
 
@@ -827,6 +834,12 @@ with right_col:
                         mu_log = to_scalar(getattr(dist, "mu", np.nan))
                         sigma_log = to_scalar(getattr(dist, "sigma", np.nan))
                         mean_original = np.exp(mu_log + 0.5 * (sigma_log ** 2)) if np.isfinite(mu_log) and np.isfinite(sigma_log) else np.nan
+                        median_original = np.exp(mu_log) if np.isfinite(mu_log) else np.nan
+                        std_original = (
+                            np.sqrt((np.exp(sigma_log ** 2) - 1.0) * np.exp(2.0 * mu_log + sigma_log ** 2))
+                            if np.isfinite(mu_log) and np.isfinite(sigma_log)
+                            else np.nan
+                        )
 
                         y_low = to_scalar(dist.ppf(0.001))
                         y_high = to_scalar(dist.ppf(0.999))
@@ -854,6 +867,9 @@ with right_col:
                             st.warning("Could not evaluate the distribution PDF for plotting.")
                         else:
                             density_df = pd.DataFrame({"x": x_grid[valid], "pdf": pdf_values[valid]})
+                            y_max = float(density_df["pdf"].max())
+                            y_offset = -0.06
+                            y_axis_max = y_max * 1.25 if y_max > 0 else 1.2
 
                             x_low = 0.0
                             x_high = max(float(density_df["x"].max()), quantiles[0.9], quantiles[0.5], 1.0)
@@ -864,7 +880,7 @@ with right_col:
                                     "x": [quantiles[q] for q in quantile_levels],
                                 }
                             )
-                            q_df["label"] = q_df["quantile"].map(lambda q: f"q={q:.2f}")
+                            q_df["label"] = q_df["quantile"].map(lambda q: f"q = {q:.2f}")
                             q_df["pdf"] = np.interp(q_df["x"], density_df["x"], density_df["pdf"])
 
                             density_chart = (
@@ -872,7 +888,7 @@ with right_col:
                                 .mark_area(opacity=0.45, color="#9db7d5")
                                 .encode(
                                     x=alt.X("x:Q", title="Unit price (thousand VND)"),
-                                    y=alt.Y("pdf:Q", title="Density"),
+                                    y=alt.Y("pdf:Q", title="Density", scale=alt.Scale(domain=[0, y_axis_max])),
                                     tooltip=[
                                         alt.Tooltip("x:Q", title="Unit price", format=",.3f"),
                                         alt.Tooltip("pdf:Q", title="Density", format=".6f"),
@@ -885,7 +901,7 @@ with right_col:
                                 .mark_line(color="#0b3c6f", strokeWidth=2)
                                 .encode(
                                     x=alt.X("x:Q", title="Unit price (thousand VND)"),
-                                    y=alt.Y("pdf:Q", title="Density"),
+                                    y=alt.Y("pdf:Q", title="Density", scale=alt.Scale(domain=[0, y_axis_max])),
                                 )
                             )
 
@@ -921,21 +937,97 @@ with right_col:
 
                             q_labels = (
                                 alt.Chart(q_df)
-                                .mark_text(align="left", baseline="middle", dx=8, color="#1f2937", fontSize=12)
+                                .mark_text(align="left", baseline="bottom", dx=8, color="#1f2937", fontSize=12)
                                 .encode(
                                     x=alt.X("x:Q"),
-                                    y=alt.Y("pdf:Q"),
+                                    y=alt.Y("pdf:Q", scale=alt.Scale(domain=[0, y_axis_max])),
                                     text=alt.Text("label:N"),
                                 )
                             )
 
                             st.subheader("Predicted winning bid price distribution")
                             if np.isfinite(mean_original):
-                                st.markdown(f"**Mean (original scale): {mean_original:,.3f}**")
-                            st.altair_chart(
-                                (density_chart + density_outline + q_rules + q_points + q_labels)
-                                .properties(height=320)
-                                .configure_view(stroke=None)
-                                .configure_axis(labelColor="black", titleColor="black", labelFontSize=14, titleFontSize=14),
-                                width="stretch",
-                            )
+                                st.markdown(f"**Mean: {mean_original*1000:,.0f} VND**")
+                            if np.isfinite(median_original):
+                                st.markdown(f"**Median: {median_original*1000:,.0f} VND**")
+                            if np.isfinite(std_original):
+                                st.markdown(f"**Standard deviation: {std_original*1000:,.0f} VND**")
+                            plot_space, _ = st.columns([7, 3])
+                            with plot_space:
+                                st.altair_chart(
+                                    (density_chart + density_outline + q_rules + q_points + q_labels)
+                                    .properties(height=320)
+                                    .configure_view(stroke=None)
+                                    .configure_axis(labelColor="black", titleColor="black", labelFontSize=14, titleFontSize=14),
+                                    width="stretch",
+                                )
+                                quantity = st.session_state[f"Predict: {colnames.quantity}"]
+                                cost = st.session_state["Predict: cost"] / 1e3
+                                if cost > 0:
+                                    x_vals = density_df["x"].to_numpy(dtype=float)
+                                    log_x_vals = np.log(np.clip(x_vals, 1e-12, None))
+
+                                    try:
+                                        cdf_vals = np.asarray(dist.cdf(log_x_vals), dtype=float).reshape(-1)
+                                        if cdf_vals.size != x_vals.size:
+                                            raise ValueError("Unexpected cdf output shape")
+                                    except Exception:
+                                        cdf_vals = np.array([to_scalar(dist.cdf(np.log(max(x, 1e-12)))) for x in x_vals], dtype=float)
+
+                                    survival_vals = np.clip(1.0 - cdf_vals, 0.0, 1.0)
+                                    expected_profit = (x_vals * quantity - cost) * survival_vals
+                                    expected_profit = np.maximum(expected_profit, 0.0)
+
+                                    profit_df = pd.DataFrame({"x": x_vals, "expected_profit": expected_profit})
+                                    valid_profit_df = profit_df[np.isfinite(profit_df["expected_profit"])].copy()
+
+                                    profit_line = (
+                                        alt.Chart(profit_df)
+                                        .mark_line(color="#b13f3f", strokeWidth=2)
+                                        .encode(
+                                            x=alt.X("x:Q", title="Unit price (thousand VND)"),
+                                            y=alt.Y("expected_profit:Q", title="Expected profit (thousand VND)", scale=alt.Scale(domainMin=0)),
+                                            tooltip=[
+                                                alt.Tooltip("x:Q", title="Unit price (thousand VND)", format=",.3f"),
+                                                alt.Tooltip("expected_profit:Q", title="Expected profit (thousand VND)", format=",.3f"),
+                                            ],
+                                        )
+                                    )
+
+                                    max_profit_line = alt.Chart(pd.DataFrame({"x": []})).mark_rule()
+                                    max_profit_point = alt.Chart(pd.DataFrame({"x": [], "expected_profit": []})).mark_point()
+                                    if not valid_profit_df.empty:
+                                        max_idx = valid_profit_df["expected_profit"].idxmax()
+                                        max_row = valid_profit_df.loc[[max_idx], ["x", "expected_profit"]]
+
+                                        max_profit_line = (
+                                            alt.Chart(max_row)
+                                            .mark_rule(color="#1f2937", strokeDash=[6, 6], strokeWidth=2)
+                                            .encode(
+                                                x=alt.X("x:Q"),
+                                                tooltip=[
+                                                    alt.Tooltip("x:Q", title="Optimal bid price (thousand VND)", format=",.3f"),
+                                                    alt.Tooltip("expected_profit:Q", title="Maximum expected profit (thousand VND)", format=",.3f"),
+                                                ],
+                                            )
+                                        )
+
+                                        max_profit_point = (
+                                            alt.Chart(max_row)
+                                            .mark_point(color="#1f2937", size=90, filled=True)
+                                            .encode(x=alt.X("x:Q"), y=alt.Y("expected_profit:Q"),tooltip=[
+                                                    alt.Tooltip("x:Q", title="Optimal bid price (thousand VND)", format=",.3f"),
+                                                    alt.Tooltip("expected_profit:Q", title="Maximum expected profit (thousand VND)", format=",.3f"),
+                                                ])
+                                        )
+
+                                    zero_line = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color="#6b7280", strokeDash=[5, 4]).encode(y="y:Q")
+
+                                    st.subheader("Proxy for expected profit")
+                                    st.altair_chart(
+                                        (zero_line + profit_line + max_profit_line + max_profit_point)
+                                        .properties(height=280)
+                                        .configure_view(stroke=None)
+                                        .configure_axis(labelColor="black", titleColor="black", labelFontSize=14, titleFontSize=14),
+                                        width="stretch",
+                                    )
