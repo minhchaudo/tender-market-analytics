@@ -5,10 +5,15 @@ description = "Streamlit search visualization demo"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-  "altair>=6",
-  "lark>=1.3",
-  "pandas>=2",
-  "streamlit>=1.50"
+    "altair>=6",
+    "lark>=1.3",
+    "numpy>=2.4",
+    "pandas>=2",
+    "scikit-learn>=1.7",
+    "skpro>=2.12",
+    "streamlit>=1.50",
+    "tqdm>=4",
+    "xgboost>=3"
 ]
 
 [build-system]
