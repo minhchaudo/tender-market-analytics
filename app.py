@@ -156,33 +156,34 @@ with right_col:
                 if df.empty:
                     st.info("No result. Try adjusting your filters.")
                 else:
+                    df[colnames.unit_price] /= 1e6
+                    df[colnames.total_price] /= 1e9
                     with st.container():
                         st.subheader("Distribution of unit prices")
 
                         bins = 100
                         bars = alt.Chart(df).mark_bar().encode(
-                            x=alt.X(colnames.unit_price, bin=alt.Bin(maxbins=bins), title="Unit price (million VND)", axis=alt.Axis(labelExpr="datum.value / 1e6"), scale=alt.Scale(domainMin=0)),
+                            x=alt.X(colnames.unit_price, bin=alt.Bin(maxbins=bins), title="Unit price (million VND)", scale=alt.Scale(domainMin=0)),
                             y=alt.Y("count()", title="Count")
-                        )        
+                        )
                         background = bars.encode(
                             tooltip=[
-                                alt.Tooltip('mean:N', title='Mean'),
-                                alt.Tooltip('std:N', title='Standard deviation'),
-                                alt.Tooltip('min:N', title='Min'),
-                                alt.Tooltip('q1:N', title='Q1'),
-                                alt.Tooltip('q3:N', title='Q3'),
-                                alt.Tooltip('max:N', title='Max')
+                                alt.Tooltip('mean:Q', title='Mean (million VND)'),
+                                alt.Tooltip('std:Q', title='Standard deviation (million VND)'),
+                                alt.Tooltip('min:Q', title='Min (million VND)'),
+                                alt.Tooltip('q1:Q', title='Q1 (million VND)'),
+                                alt.Tooltip('q3:Q', title='Q3 (million VND)'),
+                                alt.Tooltip('max:Q', title='Max (million VND)')
                             ]
                         ).transform_calculate(
-                            mean=f"'{df[colnames.unit_price].mean():.0f} VND'",
-                            std=f"'{df[colnames.unit_price].std():.0f} VND'",
-                            min=f"'{df[colnames.unit_price].min():.0f} VND'",
-                            q1=f"'{df[colnames.unit_price].quantile(0.25):.0f} VND'",
-                            q3=f"'{df[colnames.unit_price].quantile(0.75):.0f} VND'",
-                            max=f"'{df[colnames.unit_price].max():.0f} VND'"
-                        )
+                            mean=f"'{df[colnames.unit_price].mean():.3f}'",
+                            std=f"'{df[colnames.unit_price].std():.3f}'",
+                            min=f"'{df[colnames.unit_price].min():.3f}'",
+                            q1=f"'{df[colnames.unit_price].quantile(0.25):.3f}'",
+                            q3=f"'{df[colnames.unit_price].quantile(0.75):.3f}'",
+                            max=f"'{df[colnames.unit_price].max():.3f}'"
+                        ).add_params(alt.selection_point(nearest=True))
                         bars = bars.add_params(alt.selection_point(on="mouseover", empty='none'))
-                        background = background.add_params(alt.selection_point(nearest=True))
 
                         st.altair_chart(
                             (background + bars).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(
@@ -195,16 +196,16 @@ with right_col:
 
                         data = df.groupby(colnames.contractor_name, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(5)
                         st.altair_chart(alt.Chart(data).mark_bar().encode(
-                                x=alt.X(colnames.total_price, title="Total price (billion VND)", axis=alt.Axis(labelExpr="datum.value / 1e9")),
-                                y=alt.Y(colnames.contractor_name, sort="-x", axis=alt.Axis(labelLimit=400, labelOverlap=False), title=None)
+                                x=alt.X(colnames.total_price, title="Total price (billion VND)"),
+                                y=alt.Y(colnames.contractor_name, title="Contractor", sort="-x", axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None)),
                             ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
                     with st.container():
-                        st.subheader("Top customers")
+                        st.subheader("Top investor")
 
                         data = df.groupby(colnames.investor, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(5)
                         st.altair_chart(alt.Chart(data).mark_bar().encode(
-                                x=alt.X(colnames.total_price, title="Total price (billion VND)", axis=alt.Axis(labelExpr="datum.value / 1e9")),
-                                y=alt.Y(colnames.investor, sort="-x", axis=alt.Axis(labelLimit=400, labelOverlap=False), title=None)
+                                x=alt.X(colnames.total_price, title="Total price (billion VND)"),
+                                y=alt.Y(colnames.investor, title="Investor", sort="-x", axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None))
                             ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
                     with st.container():
                         st.subheader("Unit price by contractor")
@@ -212,8 +213,8 @@ with right_col:
                         top_bidder = set(df.groupby(colnames.contractor_name, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(10)[colnames.contractor_name])
                         data = df[df[colnames.contractor_name].isin(top_bidder)]
                         st.altair_chart(alt.Chart(data).mark_boxplot().encode(
-                                x=alt.X(colnames.unit_price, title="Unit price (million VND)", axis=alt.Axis(labelExpr="datum.value / 1e6")),
-                                y=alt.Y(colnames.contractor_name, sort=alt.EncodingSortField(field=colnames.unit_price, op="median", order="descending"), axis=alt.Axis(labelLimit=400, labelOverlap=False), title=None)
+                                x=alt.X(colnames.unit_price, title="Unit price (million VND)"), 
+                                y=alt.Y(colnames.contractor_name, title="Contractor", sort=alt.EncodingSortField(field=colnames.unit_price, op="median", order="descending"), axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None)),
                             ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
                     with st.container():
                         st.subheader("Unit price by origin")
@@ -221,8 +222,8 @@ with right_col:
                         top_origin = set(df.groupby(colnames.country_origin, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(10)[colnames.country_origin])
                         data = df[df[colnames.country_origin].isin(top_origin)]
                         st.altair_chart(alt.Chart(data).mark_boxplot().encode(
-                                x=alt.X(colnames.unit_price, title="Unit price (million VND)", axis=alt.Axis(labelExpr="datum.value / 1e6")),
-                                y=alt.Y(colnames.country_origin, sort=alt.EncodingSortField(field=colnames.unit_price, op="median", order="descending"), axis=alt.Axis(labelLimit=400, labelOverlap=False), title=None)
+                                x=alt.X(colnames.unit_price, title="Unit price (million VND)"), 
+                                y=alt.Y(colnames.country_origin, title="Origin", sort=alt.EncodingSortField(field=colnames.unit_price, op="median", order="descending"), axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None))
                             ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
                     with st.container():
                         st.subheader("Unit price by manufacturer")
@@ -230,8 +231,8 @@ with right_col:
                         top_origin = set(df.groupby(colnames.manufacturer, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False).head(10)[colnames.manufacturer])
                         data = df[df[colnames.manufacturer].isin(top_origin)]
                         st.altair_chart(alt.Chart(data).mark_boxplot().encode(
-                                x=alt.X(colnames.unit_price, title="Unit price (million VND)", axis=alt.Axis(labelExpr="datum.value / 1e6")),
-                                y=alt.Y(colnames.manufacturer, sort=alt.EncodingSortField(field=colnames.unit_price, op="median", order="descending"), axis=alt.Axis(labelLimit=400, labelOverlap=False), title=None)
+                                x=alt.X(colnames.unit_price, title="Unit price (million VND)"), 
+                                y=alt.Y(colnames.manufacturer, title="Manufacturer", sort=alt.EncodingSortField(field=colnames.unit_price, op="median", order="descending"), axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None))
                             ).properties(height=alt.Step(36)).configure_view(stroke=None).configure_axis(labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16), width="stretch")
                     with st.container():
                         st.subheader("Total value by country of origin")
@@ -243,11 +244,11 @@ with right_col:
                         data = pd.concat([top9, pd.DataFrame([{colnames.country_origin: "Others", colnames.total_price: rest}])], ignore_index=True) if rest > 0 else top9
                         st.altair_chart(alt.Chart(data).mark_arc().encode(
                             theta=alt.Theta(colnames.total_price, title="Total price", sort="x"),
-                            color=alt.Color(colnames.country_origin, legend=alt.Legend(title=colnames.country_origin, labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16)),
+                            color=alt.Color(colnames.country_origin, title="Country of origin", legend=alt.Legend(title="Country of origin", labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16)),
                             order=alt.Order(colnames.total_price, sort="ascending"),
                             tooltip=[
-                                alt.Tooltip(colnames.country_origin, title=colnames.country_origin),
-                                alt.Tooltip(colnames.total_price, title="Total price", format=",.0f")
+                                alt.Tooltip(colnames.country_origin, title="Country of origin"),
+                                alt.Tooltip(colnames.total_price, title="Total price", format=",.3f")
                             ]), width="stretch")
                     with st.container():
                         st.subheader("Total value by region of origin")
@@ -259,11 +260,11 @@ with right_col:
                         data = pd.concat([top9, pd.DataFrame([{colnames.region_origin: "Others", colnames.total_price: rest}])], ignore_index=True) if rest > 0 else top9
                         st.altair_chart(alt.Chart(data).mark_arc().encode(
                             theta=alt.Theta(colnames.total_price, title="Total price", sort="x"),
-                            color=alt.Color(colnames.region_origin, legend=alt.Legend(title=colnames.region_origin, labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16)),
+                            color=alt.Color(colnames.region_origin, legend=alt.Legend(title="Region of origin", labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16)),
                             order=alt.Order(colnames.total_price, sort="ascending"),
                             tooltip=[
-                                alt.Tooltip(colnames.region_origin, title=colnames.region_origin),
-                                alt.Tooltip(colnames.total_price, title="Total price", format=",.0f")
+                                alt.Tooltip(colnames.region_origin, title="Region of origin"),
+                                alt.Tooltip(colnames.total_price, title="Total price", format=",.3f")
                             ]), width="stretch")
                     with st.container():
                         st.subheader("Total value by manufacturer")
@@ -275,11 +276,11 @@ with right_col:
                         data = pd.concat([top9, pd.DataFrame([{colnames.manufacturer: "Others", colnames.total_price: rest}])], ignore_index=True) if rest > 0 else top9
                         st.altair_chart(alt.Chart(data).mark_arc().encode(
                             theta=alt.Theta(colnames.total_price, title="Total price", sort="x"),
-                            color=alt.Color(colnames.manufacturer, legend=alt.Legend(title=colnames.manufacturer, labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16)),
+                            color=alt.Color(colnames.manufacturer, legend=alt.Legend(title="Manufacturer", labelColor="black", titleColor="black", labelFontSize=16, titleFontSize=16)),
                             order=alt.Order(colnames.total_price, sort="ascending"),
                             tooltip=[
-                                alt.Tooltip(colnames.manufacturer, title=colnames.manufacturer),
-                                alt.Tooltip(colnames.total_price, title="Total price", format=",.0f")
+                                alt.Tooltip(colnames.manufacturer, title="Manufacturer"),
+                                alt.Tooltip(colnames.total_price, title="Total price", format=",.3f")
                             ]), width="stretch")
     with tab2:
         with st.container(height=600, border=True):
