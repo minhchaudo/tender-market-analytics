@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import random
-from stqdm import stqdm
+from tqdm import tqdm
 from sklearn.base import BaseEstimator
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
@@ -526,7 +526,7 @@ def train_mean_model(
     model_name,
     mean_model_class,
     mean_param_grid,
-    progress_space
+    handle_progress_update=None
 ):  
     param_sampler = ParameterSampler(
         mean_param_grid,
@@ -545,20 +545,23 @@ def train_mean_model(
     best_val_mae = np.inf
     best_mean_params = None
 
-    for mean_params in stqdm(list(param_sampler), st_container=progress_space):
+    with tqdm(list(param_sampler)) as progress:
+        for mean_params in progress:
+            if handle_progress_update != None:
+                handle_progress_update(progress)
 
-        reg = mean_model_class(**mean_params)
+            reg = mean_model_class(**mean_params)
 
-        reg.fit(X_train, y_train)
+            reg.fit(X_train, y_train)
 
-        val_pred = reg.predict(X_val)
-        val_metrics = regression_metrics(np.exp(y_val), np.exp(val_pred))
-        val_mae = val_metrics["MAE"]
-        
+            val_pred = reg.predict(X_val)
+            val_metrics = regression_metrics(np.exp(y_val), np.exp(val_pred))
+            val_mae = val_metrics["MAE"]
+            
 
-        if val_mae < best_val_mae:
-            best_val_mae = val_mae
-            best_mean_params = mean_params
+            if val_mae < best_val_mae:
+                best_val_mae = val_mae
+                best_mean_params = mean_params
 
     trainval_df = pd.concat([train_df, val_df], axis=0)
 
@@ -592,7 +595,7 @@ def train_scale_model(
     mean_params,
     residual_param_grid,
     use_y_pred,
-    progress_space
+    handle_progress_update=None
 ):  
     param_sampler = ParameterSampler(
         residual_param_grid,
@@ -611,23 +614,26 @@ def train_scale_model(
     best_val_nll = np.inf
     best_residual_params = None
 
-    for residual_params in stqdm(list(param_sampler), st_container=progress_space):
+    with tqdm(list(param_sampler)) as progress:
+        for residual_params in progress:
+            if handle_progress_update != None:
+                handle_progress_update(progress)
+            
+            reg = ResidualDoubleCVSafe(
+                estimator=mean_model_class(**mean_params),
+                estimator_resid=residual_model_class(**residual_params),        use_y_pred=use_y_pred,
+                cv=get_cv_fn(target, features),
+            )
 
-        reg = ResidualDoubleCVSafe(
-            estimator=mean_model_class(**mean_params),
-            estimator_resid=residual_model_class(**residual_params),        use_y_pred=use_y_pred,
-            cv=get_cv_fn(target, features),
-        )
+            reg._fit(X_train, y_train)
 
-        reg._fit(X_train, y_train)
+            val_dist = reg._predict_proba(X_val)
+            val_nll = -np.mean(val_dist.log_pdf(y_val))
+            
 
-        val_dist = reg._predict_proba(X_val)
-        val_nll = -np.mean(val_dist.log_pdf(y_val))
-        
-
-        if val_nll < best_val_nll:
-            best_val_nll = val_nll
-            best_residual_params = residual_params
+            if val_nll < best_val_nll:
+                best_val_nll = val_nll
+                best_residual_params = residual_params
 
     trainval_df = pd.concat([train_df, val_df], axis=0)
 
@@ -686,19 +692,19 @@ def predict_winning_price_scale_model(
     resid_model_classes,
     param_grid_map,
     use_y_pred,
-    progress_space
+    handle_progress_update=None
 ):  
     mean_model_summary = []
     best_mean_test_mae = +np.inf
     best_mean_model_info = None
-    for (mean_model_name, mean_model_class) in zip(mean_model_names, mean_model_classes):
+    for idx, (mean_model_name, mean_model_class) in enumerate(list(zip(mean_model_names, mean_model_classes))):
         info = train_mean_model(
             train_df, val_df, test_df,
             features, target,
             mean_model_name,
             mean_model_class,
             param_grid_map[mean_model_name],
-            progress_space=progress_space
+            handle_progress_update=handle_progress_update(idx+1, len(mean_model_names)+len(resid_model_names)) if handle_progress_update != None else None
         )
         summary = {"mean_model": mean_model_name}
         summary.update(info["metrics"])
@@ -710,7 +716,7 @@ def predict_winning_price_scale_model(
     full_model_summary = []
     best_test_nll = +np.inf
     best_full_model_info = None
-    for (resid_model_name, resid_model_class) in zip(resid_model_names, resid_model_classes):
+    for idx, (resid_model_name, resid_model_class) in enumerate(list(zip(resid_model_names, resid_model_classes))):
         model_name = best_mean_model_info["name"] + "_" + resid_model_name
         info = train_scale_model(
             train_df, val_df, test_df,
@@ -721,7 +727,7 @@ def predict_winning_price_scale_model(
             mean_params=best_mean_model_info["best_mean_params"],
             residual_param_grid=param_grid_map[resid_model_name],
             use_y_pred=use_y_pred,
-            progress_space=progress_space
+            handle_progress_update=handle_progress_update(idx+1+len(mean_model_names), len(mean_model_names)+len(resid_model_names)) if handle_progress_update != None else None
         )
         test_mu, test_sigma = info["test_pred"].mu, info["test_pred"].sigma
         test_pred_median, test_pred_mean = revert_log_price(test_mu, test_sigma)
@@ -743,7 +749,7 @@ def predict_winning_price_scale_model(
             best_full_model_info["transfo"] = info["transfo"]
     return best_full_model_info, mean_model_summary, full_model_summary
 
-def train_model(df, mode, progress_space, need_prep=True):
+def train_model(df, mode, handle_progress_update=None, need_prep=True):
     hier_mean_feats = HierMeanFeatureSet().get_feature_names_out()
 
     preprocessor_mean = ColumnTransformer(
@@ -806,7 +812,7 @@ def train_model(df, mode, progress_space, need_prep=True):
         resid_model_classes=[name_to_class_map_resid[n] for n in resid_model_names],
         param_grid_map=name_to_params_map,
         use_y_pred=True,
-        progress_space=progress_space
+        handle_progress_update=handle_progress_update
     )
     return best_model, mean_model_summary, full_model_summary
 

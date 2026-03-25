@@ -32,6 +32,7 @@ class colnames:
 
 
 def handle_search_click():
+    banner_search.empty()
     query_str = st.session_state["text: query"].strip()
     if query_str == "":
         st.session_state["query_error"] = 1
@@ -69,6 +70,15 @@ def handle_search_click():
     st.session_state[f"Filter: min {colnames.closing_date}"] = df[colnames.closing_date].min()
     st.session_state[f"Filter: max {colnames.closing_date}"] = df[colnames.closing_date].max()
 
+    st.session_state[f"Predict: {colnames.investor}"] = None
+    st.session_state[f"Predict: {colnames.province}"] = None
+    st.session_state[f"Predict: {colnames.quantity}"] = None
+    st.session_state[f"Predict: {colnames.closing_date}"] = None
+    st.session_state[f"Predict: {colnames.manufacturer}"] = None
+    st.session_state[f"Predict: {colnames.country_origin}"] = None
+    st.session_state[f"Predict: cost"] = None
+
+    st.session_state["predict_error"] = None
     st.session_state["predict it"] = False
     st.session_state["model_default"] = None
     st.session_state["model_auto"] = None
@@ -76,6 +86,7 @@ def handle_search_click():
 
 
 def handle_predict_click():
+    banner_predict.empty()
     if not (
         (st.session_state[f"Predict: {colnames.investor}"] is not None)
         and (st.session_state[f"Predict: {colnames.province}"] is not None)
@@ -85,9 +96,9 @@ def handle_predict_click():
         and (st.session_state[f"Predict: {colnames.country_origin}"] is not None)
         and (st.session_state[f"Predict: model_class"] is not None)
     ):
-        with banner:
-            st.error("Please fill all the required fields!")
+        st.session_state["predict_error"] = 1
     else:
+        st.session_state["predict_error"] = None
         st.session_state["predict it"] = True
 
 
@@ -211,14 +222,16 @@ with left_col:
     with st.container(height=650, border=True):
         with st.form("Query", border=False):
             st.text_area("Search query", height=200, key="text: query")
-            if "query_error" in st.session_state and st.session_state["query_error"] is not None:
-                if st.session_state["query_error"] == 1:
-                    st.error("Please enter your query first!")
-                elif isinstance(st.session_state["query_error"], SQLCompileError):
-                    st.error(str(st.session_state["query_error"]))
-                else:
-                    st.error(str(st.session_state["query_error"]))
-                    # st.error("Unknown error occured! Please check your query and try again.")
+            banner_search = st.empty()
+            with banner_search:
+                if "query_error" in st.session_state and st.session_state["query_error"] is not None:
+                    if st.session_state["query_error"] == 1:
+                        st.error("Please enter your query first!")
+                    elif isinstance(st.session_state["query_error"], SQLCompileError):
+                        st.error(str(st.session_state["query_error"]))
+                    else:
+                        st.error(str(st.session_state["query_error"]))
+                        # st.error("Unknown error occured! Please check your query and try again.")
             st.form_submit_button("Search", on_click=handle_search_click, width="stretch")
         if "data" in st.session_state and not st.session_state["data"].empty:
             generate_label_filter(colnames.investor)
@@ -783,7 +796,10 @@ with right_col:
                                 key=f"Predict: cost",
                                 min_value=0,
                             )
-                    banner = st.container()
+                    banner_predict = st.empty()
+                    with banner_predict:
+                        if st.session_state["predict_error"] != None:
+                            st.error("Please fill all required fields!")
                     _, class_space, button_space, _ = st.columns([2, 1, 2, 3], gap="small", vertical_alignment="bottom")
                     with class_space:
                         st.selectbox("Model class", ["Default", "Auto"], key=f"Predict: model_class")
@@ -799,8 +815,14 @@ with right_col:
                     st.session_state["predict it"] = False
                     left_placeholder.empty()
                     right_placeholder.empty()
+                    def handle_progress_update(trained_models, total_models):
+                        def update_pbar_and_caption(tqdm):
+                            with progress_space:
+                                st.progress(tqdm.n/tqdm.total, f"Training model {trained_models}/{total_models}")
+                        return update_pbar_and_caption
                     if st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"] == None:
-                        model, _, _ = train_model(st.session_state["data"], st.session_state["Predict: model_class"].lower(), progress_space)
+                        model, _, _ = train_model(st.session_state["data"], st.session_state["Predict: model_class"].lower(), handle_progress_update)
+                        progress_space.empty()
                         st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"] = model
                     else:
                         model = st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"]
