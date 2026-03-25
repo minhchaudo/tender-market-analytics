@@ -10,7 +10,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from skpro.regression.residual import ResidualDouble
 from skpro.utils.numpy import flatten_to_1D_if_colvector
 from skpro.utils.sklearn import prep_skl_df
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, TimeSeriesSplit
 import pandas as pd
 from xgboost import XGBRegressor
 from sklearn.ensemble import RandomForestRegressor
@@ -25,6 +25,11 @@ from scipy.stats import norm
 warnings.filterwarnings(
     "ignore",
     message="The total space of parameters .* is smaller than n_iter"
+)
+
+warnings.filterwarnings(
+    "ignore",
+    message="X does not have valid feature names"
 )
 
 FEATURES = [
@@ -275,7 +280,7 @@ class ResidualDoubleCVSafe(ResidualDouble):
         distr_params=None,
         use_y_pred=False,
         cv=None,
-        min_scale=1e-10):
+        min_scale=0.05): # +/- 8.6%
         super().__init__(estimator,
                         estimator_resid,
                         residual_trafo,
@@ -288,12 +293,14 @@ class ResidualDoubleCVSafe(ResidualDouble):
 
     def _predict_residuals_cv(self, X, y, cv, est):
         method = "predict"
-        y_pred = y.copy()
+        y_pred = []
+        all_test_idxs = []
 
-        for X_train, y_train, X_test, y_test, tt_idx in cv(X, y):
+        for X_train, y_train, X_test, y_test, test_idx in cv(X, y):
             fitted_est = clone(est).fit(X_train, y_train)
-            y_pred[tt_idx] = getattr(fitted_est, method)(X_test)
-        return y_pred
+            y_pred.append(getattr(fitted_est, method)(X_test))
+            all_test_idxs.append(test_idx)
+        return np.concat(y_pred), np.concat(all_test_idxs)
     
     def _fit(self, X, y):
         est = self.estimator_
@@ -315,21 +322,24 @@ class ResidualDoubleCVSafe(ResidualDouble):
 
         if cv is None:
             y_pred = est.predict(X)
+            resid_idxs = list(range(len(y_pred)))
         else:
-            y_pred = self._predict_residuals_cv(X, y, cv, est)
+            y_pred, resid_idxs = self._predict_residuals_cv(X, y, cv, est)
 
+        y_r = y[resid_idxs]
         if residual_trafo == "absolute":
-            resids = np.abs(y - y_pred)
+            resids = np.abs(y_r - y_pred)
         elif residual_trafo == "squared":
-            resids = (y - y_pred) ** 2
+            resids = (y_r - y_pred) ** 2
         else:
-            resids = residual_trafo(y - y_pred)
+            resids = residual_trafo(y_r - y_pred)
 
         resids = flatten_to_1D_if_colvector(resids)
 
         if use_y_pred:
-            y_ix = {"index": X.index, "columns": self._y_cols}
-            X_r = pd.concat([X, pd.DataFrame(y_pred, **y_ix)], axis=1)
+            X_r = X.iloc[resid_idxs].reset_index(drop=True)
+            y_ix = {"index": X_r.index, "columns": self._y_cols}
+            X_r = pd.concat([X_r, pd.DataFrame(y_pred, **y_ix)], axis=1)
         else:
             X_r = X
 
@@ -429,7 +439,7 @@ class HierMean(BaseEstimator):
 
 def get_cv_fn(target, features, n_splits=3):
     def hiermean_cv(X, y):
-        kf = KFold(n_splits)
+        kf = TimeSeriesSplit(n_splits)
 
         X = X.copy()
         y = pd.Series(y, index=X.index)
