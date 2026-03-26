@@ -5,7 +5,10 @@ import numpy as np
 from query_logic import query, SQLCompileError
 from prob_modeling import train_model, predict
 from tooltips import *
+from dotenv import load_dotenv
+from llm import llm
 
+load_dotenv()
 
 class colnames:
     contractor_name = "contractor_name"
@@ -1140,3 +1143,4 @@ with right_col:
                                         .configure_axis(labelColor="black", titleColor="black", labelFontSize=14, titleFontSize=14),
                                         width="stretch",
                                     )
+                            st.write_stream(llm("Should I import Abbott?"))
