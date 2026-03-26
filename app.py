@@ -348,26 +348,34 @@ with right_col:
 
                     df = df.copy()
                     if df[colnames.unit_price].max() < 1e3:
+                        unit_price_factor = 1
                         unit_unit_price = "VND"
                     elif df[colnames.unit_price].max() < 1e6:
+                        unit_price_factor = 1e3
                         df[colnames.unit_price] /= 1e3
                         unit_unit_price = "thousand VND"
                     elif df[colnames.unit_price].max() < 1e9:
+                        unit_price_factor = 1e6
                         df[colnames.unit_price] /= 1e6
                         unit_unit_price = "million VND"
                     else:
+                        unit_price_factor = 1e9
                         df[colnames.unit_price] /= 1e9
                         unit_unit_price = "billion VND"
 
                     if df[colnames.total_price].max() < 1e3:
+                        total_price_factor = 1
                         unit_total_price = "VND"
                     elif df[colnames.total_price].max() < 1e6:
+                        total_price_factor = 1e3
                         df[colnames.total_price] /= 1e3
                         unit_total_price = "thousand VND"
                     elif df[colnames.total_price].max() < 1e9:
+                        total_price_factor = 1e6
                         df[colnames.total_price] /= 1e6
                         unit_total_price = "million VND"
                     else:
+                        total_price_factor = 1e9
                         df[colnames.total_price] /= 1e9
                         unit_total_price = "billion VND"
 
@@ -382,6 +390,9 @@ with right_col:
                         )
                         st.altair_chart(
                             alt.Chart(data)
+                            .transform_calculate(
+                                total_price_vnd=f"datum[{colnames.total_price!r}] * {total_price_factor}"
+                            )
                             .mark_bar()
                             .encode(
                                 x=alt.X(
@@ -394,6 +405,17 @@ with right_col:
                                     sort="-x",
                                     axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None),
                                 ),
+                                tooltip=[
+                                    alt.Tooltip(
+                                        colnames.investor,
+                                        title="Investor",
+                                    ),
+                                    alt.Tooltip(
+                                        "total_price_vnd:Q",
+                                        title="Total value (VND)",
+                                        format=",.0f",
+                                    ),
+                                ],
                             )
                             .properties(height=alt.Step(36))
                             .configure_view(stroke=None)
@@ -416,6 +438,9 @@ with right_col:
                         )
                         st.altair_chart(
                             alt.Chart(data)
+                            .transform_calculate(
+                                total_price_vnd=f"datum['{colnames.total_price}'] * {total_price_factor}"
+                            )
                             .mark_bar()
                             .encode(
                                 x=alt.X(
@@ -428,6 +453,17 @@ with right_col:
                                     sort="-x",
                                     axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None),
                                 ),
+                                tooltip=[
+                                    alt.Tooltip(
+                                        colnames.contractor_name,
+                                        title="Contractor",
+                                    ),
+                                    alt.Tooltip(
+                                        "total_price_vnd:Q",
+                                        title="Total value (VND)",
+                                        format=",.0f",
+                                    ),
+                                ],
                             )
                             .properties(height=alt.Step(36))
                             .configure_view(stroke=None)
@@ -438,44 +474,66 @@ with right_col:
                                 titleFontSize=16,
                             ),
                             width="stretch",
-                        )
+                        ) 
                     with st.container():
                         st.subheader("Unit price distribution", help=help_unit_price)
 
                         bins = 100
+
                         bars = (
                             alt.Chart(df)
-                            .mark_bar()
-                            .encode(
-                                x=alt.X(colnames.unit_price, bin=alt.Bin(maxbins=bins), title=f"Unit price ({unit_unit_price})"),
-                                y=alt.Y("count()", title="Count"),
-                            )
-                        )
-                        background = (
-                            bars.encode(
-                                tooltip=[
-                                    alt.Tooltip("mean:Q", title=f"Mean ({unit_unit_price})"),
-                                    alt.Tooltip(
-                                        "std:Q",
-                                        title=f"Standard deviation ({unit_unit_price})",
-                                    ),
-                                    alt.Tooltip("min:Q", title=f"Min ({unit_unit_price})"),
-                                    alt.Tooltip("q1:Q", title=f"Q1 ({unit_unit_price})"),
-                                    alt.Tooltip("q3:Q", title=f"Q3 ({unit_unit_price})"),
-                                    alt.Tooltip("max:Q", title=f"Max ({unit_unit_price})"),
-                                ]
+                            .transform_bin(
+                                ["bin_start", "bin_end"],
+                                field=colnames.unit_price,
+                                bin=alt.Bin(maxbins=bins),
                             )
                             .transform_calculate(
-                                mean=f"'{df[colnames.unit_price].mean():.3f}'",
-                                std=f"'{df[colnames.unit_price].std():.3f}'",
-                                min=f"'{df[colnames.unit_price].min():.3f}'",
-                                q1=f"'{df[colnames.unit_price].quantile(0.25):.3f}'",
-                                q3=f"'{df[colnames.unit_price].quantile(0.75):.3f}'",
-                                max=f"'{df[colnames.unit_price].max():.3f}'",
+                                bin_start_vnd=f"datum.bin_start * {unit_price_factor}",
+                                bin_end_vnd=f"datum.bin_end * {unit_price_factor}",
                             )
-                            .add_params(alt.selection_point(nearest=True))
+                            .mark_bar()
+                            .encode(
+                                x=alt.X(
+                                    "bin_start:Q",
+                                    title=f"Unit price ({unit_unit_price})",
+                                    scale=alt.Scale(domainMin=0),
+                                ),
+                                x2="bin_end:Q",
+                                y=alt.Y("count()", title="Count"),
+                                tooltip=[
+                                    alt.Tooltip("bin_start_vnd:Q", title="Bin start (VND)", format=",.0f"),
+                                    alt.Tooltip("bin_end_vnd:Q", title="Bin end (VND)", format=",.0f"),
+                                    alt.Tooltip("count()", title="Count"),
+                                ],
+                            )
                         )
-                        bars = bars.add_params(alt.selection_point(on="mouseover", empty="none"))
+
+                        background = (
+                            alt.Chart(pd.DataFrame({"dummy": [0]}))
+                            .mark_rect(opacity=0.001)
+                            .transform_calculate(
+                                mean_vnd=f"{df[colnames.unit_price].mean() * unit_price_factor:.6f}",
+                                std_vnd=f"{df[colnames.unit_price].std() * unit_price_factor:.6f}",
+                                min_vnd=f"{df[colnames.unit_price].min() * unit_price_factor:.6f}",
+                                q1_vnd=f"{df[colnames.unit_price].quantile(0.25) * unit_price_factor:.6f}",
+                                q3_vnd=f"{df[colnames.unit_price].quantile(0.75) * unit_price_factor:.6f}",
+                                max_vnd=f"{df[colnames.unit_price].max() * unit_price_factor:.6f}",
+                            )
+                            .encode(
+                                x=alt.value(0),
+                                x2=alt.value("width"),
+                                y=alt.value(0),
+                                y2=alt.value("height"),
+                                tooltip=[
+                                    alt.Tooltip("mean_vnd:Q", title="Mean (VND)", format=",.0f"),
+                                    alt.Tooltip("std_vnd:Q", title="Standard deviation (VND)", format=",.0f"),
+                                    alt.Tooltip("min_vnd:Q", title="Min (VND)", format=",.0f"),
+                                    alt.Tooltip("q1_vnd:Q", title="Q1 (VND)", format=",.0f"),
+                                    alt.Tooltip("q3_vnd:Q", title="Q3 (VND)", format=",.0f"),
+                                    alt.Tooltip("max_vnd:Q", title="Max (VND)", format=",.0f"),
+                                ],
+                            )
+                        )
 
                         st.altair_chart(
                             (background + bars)
@@ -489,35 +547,133 @@ with right_col:
                             ),
                             width="stretch",
                         )
+
                     with st.container():
                         st.subheader("Unit price by contractor", help=help_unit_price_by_contractor)
 
-                        top_bidder = set(
+                        top_bidder = (
                             df.groupby(colnames.contractor_name, as_index=False)[colnames.total_price]
                             .sum()
                             .sort_values(by=colnames.total_price, ascending=False)
                             .head(10)[colnames.contractor_name]
+                            .to_list()
                         )
                         data = df[df[colnames.contractor_name].isin(top_bidder)]
-                        st.altair_chart(
-                            alt.Chart(data)
-                            .mark_boxplot()
-                            .encode(
-                                x=alt.X(
-                                    colnames.unit_price,
-                                    title=f"Unit price ({unit_unit_price})",
-                                ),
-                                y=alt.Y(
-                                    colnames.contractor_name,
-                                    title="Contractor",
-                                    sort=alt.EncodingSortField(
-                                        field=colnames.unit_price,
-                                        op="median",
-                                        order="descending",
-                                    ),
-                                    axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None),
-                                ),
+
+                        y = alt.Y(
+                            colnames.contractor_name,
+                            title="Contractor",
+                            sort=top_bidder,
+                            axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None),
+                        )
+
+                        x_title = f"Unit price ({unit_unit_price})"
+
+                        # Keep chart geometry in original unit price
+                        base = alt.Chart(data).transform_joinaggregate(
+                            q1=f"q1({colnames.unit_price})",
+                            median=f"median({colnames.unit_price})",
+                            q3=f"q3({colnames.unit_price})",
+                            groupby=[colnames.contractor_name],
+                        ).transform_calculate(
+                            iqr="datum.q3 - datum.q1",
+                            lower_fence="datum.q1 - 1.5 * datum.iqr",
+                            upper_fence="datum.q3 + 1.5 * datum.iqr",
+                            # Converted values for tooltip only
+                            unit_price_vnd=f"datum['{colnames.unit_price}'] * {unit_price_factor}",
+                            q1_vnd=f"datum.q1 * {unit_price_factor}",
+                            median_vnd=f"datum.median * {unit_price_factor}",
+                            q3_vnd=f"datum.q3 * {unit_price_factor}",
+                            lower_fence_vnd=f"datum.lower_fence * {unit_price_factor}",
+                            upper_fence_vnd=f"datum.upper_fence * {unit_price_factor}",
+                        )
+
+                        whisker_stats = (
+                            base.transform_filter(
+                                f"(datum['{colnames.unit_price}'] >= datum.lower_fence) && "
+                                f"(datum['{colnames.unit_price}'] <= datum.upper_fence)"
                             )
+                            .transform_aggregate(
+                                whisker_min=f"min({colnames.unit_price})",
+                                whisker_max=f"max({colnames.unit_price})",
+                                q1="min(q1)",
+                                median="min(median)",
+                                q3="min(q3)",
+                                lower_fence="min(lower_fence)",
+                                upper_fence="min(upper_fence)",
+                                groupby=[colnames.contractor_name],
+                            )
+                            .transform_calculate(
+                                whisker_min_vnd=f"datum.whisker_min * {unit_price_factor}",
+                                whisker_max_vnd=f"datum.whisker_max * {unit_price_factor}",
+                                q1_vnd=f"datum.q1 * {unit_price_factor}",
+                                median_vnd=f"datum.median * {unit_price_factor}",
+                                q3_vnd=f"datum.q3 * {unit_price_factor}",
+                                lower_fence_vnd=f"datum.lower_fence * {unit_price_factor}",
+                                upper_fence_vnd=f"datum.upper_fence * {unit_price_factor}",
+                            )
+                        )
+
+                        whiskers = whisker_stats.mark_rule().encode(
+                            x=alt.X("whisker_min:Q", title=x_title, axis=alt.Axis(format=",.2f")),
+                            x2="whisker_max",
+                            y=y,
+                            tooltip=[
+                                alt.Tooltip(colnames.contractor_name, title="Contractor"),
+                                alt.Tooltip("whisker_min_vnd:Q", title="Whisker min (VND)", format=",.0f"),
+                                alt.Tooltip("q1_vnd:Q", title="Q1 (VND)", format=",.0f"),
+                                alt.Tooltip("median_vnd:Q", title="Median (VND)", format=",.0f"),
+                                alt.Tooltip("q3_vnd:Q", title="Q3 (VND)", format=",.0f"),
+                                alt.Tooltip("whisker_max_vnd:Q", title="Whisker max (VND)", format=",.0f"),
+                            ],
+                        )
+
+                        box = whisker_stats.mark_bar(size=18, stroke="#0169CA").encode(
+                            x=alt.X("q1:Q", title=x_title, axis=alt.Axis(format=",.2f")),
+                            x2="q3",
+                            y=y,
+                            tooltip=[
+                                alt.Tooltip(colnames.contractor_name, title="Contractor"),
+                                alt.Tooltip("q1_vnd:Q", title="Q1 (VND)", format=",.0f"),
+                                alt.Tooltip("median_vnd:Q", title="Median (VND)", format=",.0f"),
+                                alt.Tooltip("q3_vnd:Q", title="Q3 (VND)", format=",.0f"),
+                            ],
+                        )
+
+                        median_tick = whisker_stats.mark_tick(
+                            color="#BCD3F0",
+                            size=18,
+                            thickness=1,
+                        ).encode(
+                            x=alt.X("median:Q", title=x_title, axis=alt.Axis(format=",.2f")),
+                            y=y,
+                            tooltip=[
+                                alt.Tooltip(colnames.contractor_name, title="Contractor"),
+                                alt.Tooltip("median_vnd:Q", title="Median (VND)", format=",.0f"),
+                            ],
+                        )
+
+                        outliers = base.transform_filter(
+                            f"(datum['{colnames.unit_price}'] < datum.lower_fence) || "
+                            f"(datum['{colnames.unit_price}'] > datum.upper_fence)"
+                        ).mark_point(
+                            shape="circle",
+                            filled=True,
+                            fill="white",
+                            stroke="#2E77D0",
+                            strokeWidth=1.2,
+                            size=35,
+                        ).encode(
+                            x=alt.X(f"{colnames.unit_price}:Q", title=x_title, axis=alt.Axis(format=",.2f")),
+                            y=y,
+                            tooltip=[
+                                alt.Tooltip(colnames.contractor_name, title="Contractor"),
+                                alt.Tooltip("unit_price_vnd:Q", title="Unit price (VND)", format=",.0f"),
+                            ],
+                        )
+
+                        st.altair_chart(
+                            (whiskers + box + median_tick + outliers)
                             .properties(height=alt.Step(36))
                             .configure_view(stroke=None)
                             .configure_axis(
@@ -528,35 +684,129 @@ with right_col:
                             ),
                             width="stretch",
                         )
+
                     with st.container():
                         st.subheader("Unit price by country of origin", help=help_unit_price_by_country_origin)
 
-                        top_origin = set(
+                        top_origin = (
                             df.groupby(colnames.country_origin, as_index=False)[colnames.total_price]
                             .sum()
                             .sort_values(by=colnames.total_price, ascending=False)
                             .head(10)[colnames.country_origin]
+                            .to_list()
                         )
                         data = df[df[colnames.country_origin].isin(top_origin)]
-                        st.altair_chart(
+
+                        y = alt.Y(
+                            colnames.country_origin,
+                            title="Origin",
+                            sort=top_origin,
+                            axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None),
+                        )
+
+                        x_title = f"Unit price ({unit_unit_price})"
+
+                        base = (
                             alt.Chart(data)
-                            .mark_boxplot()
-                            .encode(
-                                x=alt.X(
-                                    colnames.unit_price,
-                                    title=f"Unit price ({unit_unit_price})",
-                                ),
-                                y=alt.Y(
-                                    colnames.country_origin,
-                                    title="Origin",
-                                    sort=alt.EncodingSortField(
-                                        field=colnames.unit_price,
-                                        op="median",
-                                        order="descending",
-                                    ),
-                                    axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None),
-                                ),
+                            .transform_joinaggregate(
+                                q1=f"q1({colnames.unit_price})",
+                                median=f"median({colnames.unit_price})",
+                                q3=f"q3({colnames.unit_price})",
+                                groupby=[colnames.country_origin],
                             )
+                            .transform_calculate(
+                                iqr="datum.q3 - datum.q1",
+                                lower_fence="datum.q1 - 1.5 * datum.iqr",
+                                upper_fence="datum.q3 + 1.5 * datum.iqr",
+                                q1_vnd=f"datum.q1 * {unit_price_factor}",
+                                median_vnd=f"datum.median * {unit_price_factor}",
+                                q3_vnd=f"datum.q3 * {unit_price_factor}",
+                                unit_price_vnd=f"datum['{colnames.unit_price}'] * {unit_price_factor}",
+                            )
+                        )
+
+                        whisker_stats = (
+                            base.transform_filter(
+                                f"(datum['{colnames.unit_price}'] >= datum.lower_fence) && "
+                                f"(datum['{colnames.unit_price}'] <= datum.upper_fence)"
+                            )
+                            .transform_aggregate(
+                                whisker_min=f"min({colnames.unit_price})",
+                                whisker_max=f"max({colnames.unit_price})",
+                                q1="min(q1)",
+                                median="min(median)",
+                                q3="min(q3)",
+                                groupby=[colnames.country_origin],
+                            )
+                            .transform_calculate(
+                                whisker_min_vnd=f"datum.whisker_min * {unit_price_factor}",
+                                whisker_max_vnd=f"datum.whisker_max * {unit_price_factor}",
+                                q1_vnd=f"datum.q1 * {unit_price_factor}",
+                                median_vnd=f"datum.median * {unit_price_factor}",
+                                q3_vnd=f"datum.q3 * {unit_price_factor}",
+                            )
+                        )
+
+                        whiskers = whisker_stats.mark_rule().encode(
+                            x=alt.X("whisker_min:Q", title=x_title, axis=alt.Axis(format=",.2f")),
+                            x2="whisker_max",
+                            y=y,
+                            tooltip=[
+                                alt.Tooltip(colnames.country_origin, title="Origin"),
+                                alt.Tooltip("whisker_min_vnd:Q", title="Whisker min (VND)", format=",.0f"),
+                                alt.Tooltip("q1_vnd:Q", title="Q1 (VND)", format=",.0f"),
+                                alt.Tooltip("median_vnd:Q", title="Median (VND)", format=",.0f"),
+                                alt.Tooltip("q3_vnd:Q", title="Q3 (VND)", format=",.0f"),
+                                alt.Tooltip("whisker_max_vnd:Q", title="Whisker max (VND)", format=",.0f"),
+                            ],
+                        )
+
+                        box = whisker_stats.mark_bar(size=18, stroke="#0169CA").encode(
+                            x=alt.X("q1:Q", title=x_title, axis=alt.Axis(format=",.2f")),
+                            x2="q3",
+                            y=y,
+                            tooltip=[
+                                alt.Tooltip(colnames.country_origin, title="Origin"),
+                                alt.Tooltip("q1_vnd:Q", title="Q1 (VND)", format=",.0f"),
+                                alt.Tooltip("median_vnd:Q", title="Median (VND)", format=",.0f"),
+                                alt.Tooltip("q3_vnd:Q", title="Q3 (VND)", format=",.0f"),
+                            ],
+                        )
+
+                        median_tick = whisker_stats.mark_tick(
+                            color="#BCD3F0",
+                            size=18,
+                            thickness=1,
+                        ).encode(
+                            x=alt.X("median:Q", title=x_title, axis=alt.Axis(format=",.2f")),
+                            y=y,
+                            tooltip=[
+                                alt.Tooltip(colnames.country_origin, title="Origin"),
+                                alt.Tooltip("median_vnd:Q", title="Median (VND)", format=",.0f"),
+                            ],
+                        )
+
+                        outliers = base.transform_filter(
+                            f"(datum['{colnames.unit_price}'] < datum.lower_fence) || "
+                            f"(datum['{colnames.unit_price}'] > datum.upper_fence)"
+                        ).mark_point(
+                            shape="circle",
+                            filled=True,
+                            fill="white",
+                            stroke="#2E77D0",
+                            strokeWidth=1.2,
+                            size=35,
+                        ).encode(
+                            x=alt.X(f"{colnames.unit_price}:Q", title=x_title, axis=alt.Axis(format=",.2f")),
+                            y=y,
+                            tooltip=[
+                                alt.Tooltip(colnames.country_origin, title="Origin"),
+                                alt.Tooltip("unit_price_vnd:Q", title="Unit price (VND)", format=",.0f"),
+                            ],
+                        )
+
+                        st.altair_chart(
+                            (whiskers + box + median_tick + outliers)
                             .properties(height=alt.Step(36))
                             .configure_view(stroke=None)
                             .configure_axis(
@@ -567,35 +817,130 @@ with right_col:
                             ),
                             width="stretch",
                         )
+
+
                     with st.container():
                         st.subheader("Unit price by manufacturer", help=help_unit_price_by_manufacturer)
 
-                        top_origin = set(
+                        top_manufacturer = (
                             df.groupby(colnames.manufacturer, as_index=False)[colnames.total_price]
                             .sum()
                             .sort_values(by=colnames.total_price, ascending=False)
                             .head(10)[colnames.manufacturer]
+                            .to_list()
                         )
-                        data = df[df[colnames.manufacturer].isin(top_origin)]
-                        st.altair_chart(
+                        data = df[df[colnames.manufacturer].isin(top_manufacturer)]
+
+                        y = alt.Y(
+                            colnames.manufacturer,
+                            title="Manufacturer",
+                            sort=top_manufacturer,
+                            axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None),
+                        )
+
+                        x_title = f"Unit price ({unit_unit_price})"
+
+                        base = (
                             alt.Chart(data)
-                            .mark_boxplot()
-                            .encode(
-                                x=alt.X(
-                                    colnames.unit_price,
-                                    title=f"Unit price ({unit_unit_price})",
-                                ),
-                                y=alt.Y(
-                                    colnames.manufacturer,
-                                    title="Manufacturer",
-                                    sort=alt.EncodingSortField(
-                                        field=colnames.unit_price,
-                                        op="median",
-                                        order="descending",
-                                    ),
-                                    axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None),
-                                ),
+                            .transform_joinaggregate(
+                                q1=f"q1({colnames.unit_price})",
+                                median=f"median({colnames.unit_price})",
+                                q3=f"q3({colnames.unit_price})",
+                                groupby=[colnames.manufacturer],
                             )
+                            .transform_calculate(
+                                iqr="datum.q3 - datum.q1",
+                                lower_fence="datum.q1 - 1.5 * datum.iqr",
+                                upper_fence="datum.q3 + 1.5 * datum.iqr",
+                                q1_vnd=f"datum.q1 * {unit_price_factor}",
+                                median_vnd=f"datum.median * {unit_price_factor}",
+                                q3_vnd=f"datum.q3 * {unit_price_factor}",
+                                unit_price_vnd=f"datum['{colnames.unit_price}'] * {unit_price_factor}",
+                            )
+                        )
+
+                        whisker_stats = (
+                            base.transform_filter(
+                                f"(datum['{colnames.unit_price}'] >= datum.lower_fence) && "
+                                f"(datum['{colnames.unit_price}'] <= datum.upper_fence)"
+                            )
+                            .transform_aggregate(
+                                whisker_min=f"min({colnames.unit_price})",
+                                whisker_max=f"max({colnames.unit_price})",
+                                q1="min(q1)",
+                                median="min(median)",
+                                q3="min(q3)",
+                                groupby=[colnames.manufacturer],
+                            )
+                            .transform_calculate(
+                                whisker_min_vnd=f"datum.whisker_min * {unit_price_factor}",
+                                whisker_max_vnd=f"datum.whisker_max * {unit_price_factor}",
+                                q1_vnd=f"datum.q1 * {unit_price_factor}",
+                                median_vnd=f"datum.median * {unit_price_factor}",
+                                q3_vnd=f"datum.q3 * {unit_price_factor}",
+                            )
+                        )
+
+                        whiskers = whisker_stats.mark_rule().encode(
+                            x=alt.X("whisker_min:Q", title=x_title, axis=alt.Axis(format=",.2f")),
+                            x2="whisker_max",
+                            y=y,
+                            tooltip=[
+                                alt.Tooltip(colnames.manufacturer, title="Manufacturer"),
+                                alt.Tooltip("whisker_min_vnd:Q", title="Whisker min (VND)", format=",.0f"),
+                                alt.Tooltip("q1_vnd:Q", title="Q1 (VND)", format=",.0f"),
+                                alt.Tooltip("median_vnd:Q", title="Median (VND)", format=",.0f"),
+                                alt.Tooltip("q3_vnd:Q", title="Q3 (VND)", format=",.0f"),
+                                alt.Tooltip("whisker_max_vnd:Q", title="Whisker max (VND)", format=",.0f"),
+                            ],
+                        )
+
+                        box = whisker_stats.mark_bar(size=18, stroke="#0169CA").encode(
+                            x=alt.X("q1:Q", title=x_title, axis=alt.Axis(format=",.2f")),
+                            x2="q3",
+                            y=y,
+                            tooltip=[
+                                alt.Tooltip(colnames.manufacturer, title="Manufacturer"),
+                                alt.Tooltip("q1_vnd:Q", title="Q1 (VND)", format=",.0f"),
+                                alt.Tooltip("median_vnd:Q", title="Median (VND)", format=",.0f"),
+                                alt.Tooltip("q3_vnd:Q", title="Q3 (VND)", format=",.0f"),
+                            ],
+                        )
+
+                        median_tick = whisker_stats.mark_tick(
+                            color="#BCD3F0",
+                            size=18,
+                            thickness=1,
+                        ).encode(
+                            x=alt.X("median:Q", title=x_title, axis=alt.Axis(format=",.2f")),
+                            y=y,
+                            tooltip=[
+                                alt.Tooltip(colnames.manufacturer, title="Manufacturer"),
+                                alt.Tooltip("median_vnd:Q", title="Median (VND)", format=",.0f"),
+                            ],
+                        )
+
+                        outliers = base.transform_filter(
+                            f"(datum['{colnames.unit_price}'] < datum.lower_fence) || "
+                            f"(datum['{colnames.unit_price}'] > datum.upper_fence)"
+                        ).mark_point(
+                            shape="circle",
+                            filled=True,
+                            fill="white",
+                            stroke="#2E77D0",
+                            strokeWidth=1.2,
+                            size=35,
+                        ).encode(
+                            x=alt.X(f"{colnames.unit_price}:Q", title=x_title, axis=alt.Axis(format=",.2f")),
+                            y=y,
+                            tooltip=[
+                                alt.Tooltip(colnames.manufacturer, title="Manufacturer"),
+                                alt.Tooltip("unit_price_vnd:Q", title="Unit price (VND)", format=",.0f"),
+                            ],
+                        )
+
+                        st.altair_chart(
+                            (whiskers + box + median_tick + outliers)
                             .properties(height=alt.Step(36))
                             .configure_view(stroke=None)
                             .configure_axis(
@@ -603,120 +948,6 @@ with right_col:
                                 titleColor="black",
                                 labelFontSize=16,
                                 titleFontSize=16,
-                            ),
-                            width="stretch",
-                        )
-                    with st.container():
-                        st.subheader("Total value by country of origin", help=help_total_value_by_country_origin)
-
-                        data_by_origin = (
-                            df.groupby(colnames.country_origin, as_index=False)[colnames.total_price]
-                            .sum()
-                            .sort_values(by=colnames.total_price, ascending=False)
-                        )
-                        top9 = data_by_origin.head(9)
-                        rest = data_by_origin.iloc[9:][colnames.total_price].sum()
-
-                        data = (
-                            pd.concat(
-                                [
-                                    top9,
-                                    pd.DataFrame(
-                                        [
-                                            {
-                                                colnames.country_origin: "Others",
-                                                colnames.total_price: rest,
-                                            }
-                                        ]
-                                    ),
-                                ],
-                                ignore_index=True,
-                            )
-                            if rest > 0
-                            else top9
-                        )
-                        st.altair_chart(
-                            alt.Chart(data)
-                            .mark_arc()
-                            .encode(
-                                theta=alt.Theta(colnames.total_price, title=f"Total price ({unit_total_price})", sort="x"),
-                                color=alt.Color(
-                                    colnames.country_origin,
-                                    title="Country of origin",
-                                    legend=alt.Legend(
-                                        title="Country of origin",
-                                        labelColor="black",
-                                        titleColor="black",
-                                        labelFontSize=16,
-                                        titleFontSize=16,
-                                    ),
-                                ),
-                                order=alt.Order(colnames.total_price, sort="ascending"),
-                                tooltip=[
-                                    alt.Tooltip(
-                                        colnames.country_origin,
-                                        title="Country of origin",
-                                    ),
-                                    alt.Tooltip(
-                                        colnames.total_price,
-                                        title=f"Total price ({unit_total_price})",
-                                        format=",.3f",
-                                    ),
-                                ],
-                            ),
-                            width="stretch",
-                        )
-                    with st.container():
-                        st.subheader("Total value by region of origin", help=help_total_value_by_region_origin)
-
-                        data_by_origin = (
-                            df.groupby(colnames.region_origin, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False)
-                        )
-                        top9 = data_by_origin.head(9)
-                        rest = data_by_origin.iloc[9:][colnames.total_price].sum()
-
-                        data = (
-                            pd.concat(
-                                [
-                                    top9,
-                                    pd.DataFrame(
-                                        [
-                                            {
-                                                colnames.region_origin: "Others",
-                                                colnames.total_price: rest,
-                                            }
-                                        ]
-                                    ),
-                                ],
-                                ignore_index=True,
-                            )
-                            if rest > 0
-                            else top9
-                        )
-                        st.altair_chart(
-                            alt.Chart(data)
-                            .mark_arc()
-                            .encode(
-                                theta=alt.Theta(colnames.total_price, title=f"Total price ({unit_total_price})", sort="x"),
-                                color=alt.Color(
-                                    colnames.region_origin,
-                                    legend=alt.Legend(
-                                        title="Region of origin",
-                                        labelColor="black",
-                                        titleColor="black",
-                                        labelFontSize=16,
-                                        titleFontSize=16,
-                                    ),
-                                ),
-                                order=alt.Order(colnames.total_price, sort="ascending"),
-                                tooltip=[
-                                    alt.Tooltip(colnames.region_origin, title="Region of origin"),
-                                    alt.Tooltip(
-                                        colnames.total_price,
-                                        title=f"Total price ({unit_total_price})",
-                                        format=",.3f",
-                                    ),
-                                ],
                             ),
                             width="stretch",
                         )
@@ -747,13 +978,23 @@ with right_col:
                             if rest > 0
                             else top9
                         )
+                        manu_order = (
+                            data.groupby(colnames.manufacturer)[colnames.total_price]
+                            .sum()
+                            .sort_values(ascending=False) 
+                            .index.tolist()
+                        )
                         st.altair_chart(
                             alt.Chart(data)
+                            .transform_calculate(
+                                total_price_vnd=f"datum['{colnames.total_price}'] * {total_price_factor}"
+                            )
                             .mark_arc()
                             .encode(
                                 theta=alt.Theta(colnames.total_price, title=f"Total price ({unit_total_price})", sort="x"),
                                 color=alt.Color(
                                     colnames.manufacturer,
+                                    sort=manu_order,
                                     legend=alt.Legend(
                                         title="Manufacturer",
                                         labelColor="black",
@@ -762,13 +1003,13 @@ with right_col:
                                         titleFontSize=16,
                                     ),
                                 ),
-                                order=alt.Order(colnames.total_price, sort="ascending"),
+                                order=alt.Order(colnames.total_price, sort="descending"),
                                 tooltip=[
                                     alt.Tooltip(colnames.manufacturer, title="Manufacturer"),
                                     alt.Tooltip(
-                                        colnames.total_price,
-                                        title=f"Total price ({unit_total_price})",
-                                        format=",.3f",
+                                        "total_price_vnd:Q",
+                                        title=f"Total price (VND)",
+                                        format=",.0f",
                                     ),
                                 ],
                             ),
@@ -995,14 +1236,42 @@ with right_col:
                             q_df["label"] = q_df["quantile"].map(lambda q: f"{q:.2f}")
                             q_df["pdf"] = np.interp(q_df["x"], density_df["x"], density_df["pdf"])
 
+                            summary_bg = (
+                                alt.Chart(pd.DataFrame({"dummy": [0]}))
+                                .mark_rect(opacity=0.001)
+                                .transform_calculate(
+                                    mean_vnd=f"{mean_original * 1000:.6f}" if np.isfinite(mean_original) else "null",
+                                    std_vnd=f"{std_original * 1000:.6f}" if np.isfinite(std_original) else "null",
+                                    q10_vnd=f"{quantiles[0.1] * 1000:.6f}" if np.isfinite(quantiles[0.1]) else "null",
+                                    q25_vnd=f"{quantiles[0.25] * 1000:.6f}" if np.isfinite(quantiles[0.25]) else "null",
+                                    q50_vnd=f"{quantiles[0.5] * 1000:.6f}" if np.isfinite(quantiles[0.5]) else "null",
+                                    q75_vnd=f"{quantiles[0.75] * 1000:.6f}" if np.isfinite(quantiles[0.75]) else "null",
+                                    q90_vnd=f"{quantiles[0.9] * 1000:.6f}" if np.isfinite(quantiles[0.9]) else "null",
+                                )
+                                .encode(
+                                    x=alt.value(0),
+                                    x2=alt.value("width"),
+                                    y=alt.value(0),
+                                    y2=alt.value("height"),
+                                    tooltip=[
+                                        alt.Tooltip("mean_vnd:Q", title="Mean (VND)", format=",.0f"),
+                                        alt.Tooltip("q50_vnd:Q", title="Median (VND)", format=",.0f"),
+                                        alt.Tooltip("std_vnd:Q", title="Standard deviation (VND)", format=",.0f"),
+                                    ]
+                                )
+                            )
+
                             density_chart = (
                                 alt.Chart(density_df)
+                                .transform_calculate(
+                                    x_vnd="datum.x * 1000"
+                                )
                                 .mark_area(opacity=0.45, color="#9db7d5")
                                 .encode(
                                     x=alt.X("x:Q", title="Unit price (thousand VND)"),
                                     y=alt.Y("pdf:Q", title="Density", scale=alt.Scale(domain=[0, y_axis_max])),
                                     tooltip=[
-                                        alt.Tooltip("x:Q", title="Unit price", format=",.3f"),
+                                        alt.Tooltip("x_vnd:Q", title="Unit price (VND)", format=",.0f"),
                                         alt.Tooltip("pdf:Q", title="Density", format=".6f"),
                                     ],
                                 )
@@ -1010,12 +1279,15 @@ with right_col:
 
                             density_outline = (
                                 alt.Chart(density_df)
+                                .transform_calculate(
+                                    x_vnd="datum.x * 1000"
+                                )
                                 .mark_line(color="#0b3c6f", strokeWidth=2)
                                 .encode(
                                     x=alt.X("x:Q", title="Unit price (thousand VND)"),
                                     y=alt.Y("pdf:Q", title="Density", scale=alt.Scale(domain=[0, y_axis_max])),
                                     tooltip=[
-                                        alt.Tooltip("x:Q", title="Unit price", format=",.3f"),
+                                        alt.Tooltip("x_vnd:Q", title="Unit price (VND)", format=",.0f"),
                                         alt.Tooltip("pdf:Q", title="Density", format=".6f"),
                                     ],
                                 )
@@ -1025,6 +1297,9 @@ with right_col:
 
                             q_rules = (
                                 alt.Chart(q_df)
+                                .transform_calculate(
+                                    x_vnd="datum.x * 1000"
+                                )
                                 .mark_rule(strokeWidth=2, strokeDash=[6, 6], color="#1f2937")
                                 .encode(
                                     x=alt.X("x:Q"),
@@ -1032,45 +1307,44 @@ with right_col:
                                     y2=alt.Y2("pdf:Q"),
                                     tooltip=[
                                         alt.Tooltip("label:N", title="Quantile"),
-                                        alt.Tooltip("x:Q", title="Unit price", format=",.3f"),
+                                        alt.Tooltip("x_vnd:Q", title="Unit price (VND)", format=",.0f"),
                                     ],
                                 )
                             )
 
                             q_points = (
                                 alt.Chart(q_df)
+                                .transform_calculate(
+                                    x_vnd="datum.x * 1000"
+                                )
                                 .mark_point(size=80, filled=True, color="#1f2937")
                                 .encode(
                                     x=alt.X("x:Q"),
                                     y=alt.Y("pdf:Q"),
                                     tooltip=[
                                         alt.Tooltip("label:N", title="Quantile"),
-                                        alt.Tooltip("x:Q", title="Unit price", format=",.3f"),
+                                        alt.Tooltip("x_vnd:Q", title="Unit price (VND)", format=",.0f"),
                                         alt.Tooltip("pdf:Q", title="Density", format=".6f"),
                                     ],
                                 )
                             )
 
-                            q_labels = (
-                                alt.Chart(q_df)
-                                .mark_text(align="left", baseline="bottom", dx=8, color="#1f2937", fontSize=12)
-                                .encode(
-                                    x=alt.X("x:Q"),
-                                    y=alt.Y("pdf:Q", scale=alt.Scale(domain=[0, y_axis_max])),
-                                    text=alt.Text("label:N"),
-                                )
-                            )
-
-                            st.subheader("Predicted winning bid price distribution")                            
+                            st.subheader("Predicted winning bid price distribution")
                             _, plot_space, metrics_space = st.columns([1, 8, 1])
                             with plot_space:
                                 st.altair_chart(
-                                    (density_chart + density_outline + q_rules + q_points)
+                                    (summary_bg + density_chart + density_outline + q_rules + q_points)
                                     .properties(height=320)
                                     .configure_view(stroke=None)
-                                    .configure_axis(labelColor="black", titleColor="black", labelFontSize=14, titleFontSize=14),
+                                    .configure_axis(
+                                        labelColor="black",
+                                        titleColor="black",
+                                        labelFontSize=14,
+                                        titleFontSize=14,
+                                    ),
                                     width="stretch"
                                 )
+
                             quantity = st.session_state[f"Predict: {colnames.quantity}"]
                             cost = st.session_state["Predict: cost"] / 1e3
                             if cost > 0:
@@ -1095,52 +1369,76 @@ with right_col:
 
                                 profit_line = (
                                     alt.Chart(profit_df)
+                                    .transform_calculate(
+                                        x_vnd="datum.x * 1000",
+                                        expected_profit_vnd="datum.expected_profit * 1000",
+                                    )
                                     .mark_line(color="#0b3c6f", strokeWidth=2)
                                     .encode(
                                         x=alt.X("x:Q", title="Unit price (thousand VND)"),
-                                        y=alt.Y("expected_profit:Q", title="Expected profit (thousand VND)", scale=alt.Scale(domainMin=0)),
+                                        y=alt.Y(
+                                            "expected_profit:Q",
+                                            title="Expected profit (thousand VND)",
+                                            scale=alt.Scale(domainMin=0),
+                                        ),
                                         tooltip=[
-                                            alt.Tooltip("x:Q", title="Unit price", format=",.3f"),
-                                            alt.Tooltip("expected_profit:Q", title="Expected profit", format=",.3f"),
+                                            alt.Tooltip("x_vnd:Q", title="Unit price (VND)", format=",.0f"),
+                                            alt.Tooltip("expected_profit_vnd:Q", title="Expected profit (VND)", format=",.0f"),
                                         ],
                                     )
                                 )
 
                                 max_profit_line = alt.Chart(pd.DataFrame({"x": []})).mark_rule()
                                 max_profit_point = alt.Chart(pd.DataFrame({"x": [], "expected_profit": []})).mark_point()
+
                                 if not valid_profit_df.empty:
                                     max_idx = valid_profit_df["expected_profit"].idxmax()
                                     max_row = valid_profit_df.loc[[max_idx], ["x", "expected_profit"]]
 
                                     max_profit_line = (
                                         alt.Chart(max_row)
+                                        .transform_calculate(
+                                            x_vnd="datum.x * 1000",
+                                            expected_profit_vnd="datum.expected_profit * 1000",
+                                        )
                                         .mark_rule(color="#1f2937", strokeDash=[6, 6], strokeWidth=2)
                                         .encode(
                                             x=alt.X("x:Q"),
                                             tooltip=[
-                                                alt.Tooltip("x:Q", title="Optimal unit price", format=",.3f"),
-                                                alt.Tooltip("expected_profit:Q", title="Maximum expected profit", format=",.3f"),
+                                                alt.Tooltip("x_vnd:Q", title="Optimal unit price (VND)", format=",.0f"),
+                                                alt.Tooltip("expected_profit_vnd:Q", title="Maximum expected profit (VND)", format=",.0f"),
                                             ],
                                         )
                                     )
 
                                     max_profit_point = (
                                         alt.Chart(max_row)
+                                        .transform_calculate(
+                                            x_vnd="datum.x * 1000",
+                                            expected_profit_vnd="datum.expected_profit * 1000",
+                                        )
                                         .mark_point(color="#1f2937", size=90, filled=True)
-                                        .encode(x=alt.X("x:Q"), y=alt.Y("expected_profit:Q"),tooltip=[
-                                                alt.Tooltip("x:Q", title="Optimal unit price", format=",.3f"),
-                                                alt.Tooltip("expected_profit:Q", title="Maximum expected profit", format=",.3f"),
-                                            ])
+                                        .encode(
+                                            x=alt.X("x:Q"),
+                                            y=alt.Y("expected_profit:Q"),
+                                            tooltip=[
+                                                alt.Tooltip("x_vnd:Q", title="Optimal unit price (VND)", format=",.0f"),
+                                                alt.Tooltip("expected_profit_vnd:Q", title="Maximum expected profit (VND)", format=",.0f"),
+                                            ],
+                                        )
                                     )
-
-                                zero_line = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color="#6b7280", strokeDash=[5, 4]).encode(y="y:Q")
 
                                 with plot_space:
                                     st.altair_chart(
-                                        (zero_line + profit_line + max_profit_line + max_profit_point)
+                                        (profit_line + max_profit_line + max_profit_point)
                                         .properties(height=280)
                                         .configure_view(stroke=None)
-                                        .configure_axis(labelColor="black", titleColor="black", labelFontSize=14, titleFontSize=14),
+                                        .configure_axis(
+                                            labelColor="black",
+                                            titleColor="black",
+                                            labelFontSize=14,
+                                            titleFontSize=14,
+                                        ),
                                         width="stretch",
                                     )
                             st.write_stream(llm("Should I import Abbott?"))
