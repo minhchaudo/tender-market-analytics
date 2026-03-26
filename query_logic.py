@@ -349,6 +349,7 @@ def compile_ast_to_sql(ast: Any) -> tuple[str, list[Any]]:
     SELECT {_quote(TABLE_NAME)}.*
     FROM {_quote(TABLE_NAME)}
     WHERE {where_sql}
+    ORDER BY id
     """.strip()
     return sql, params
 

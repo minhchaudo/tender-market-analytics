@@ -84,7 +84,8 @@ LGBM_PARAM_GRID = {
     "colsample_bytree": [0.5, 0.8, 1.0],
     "reg_alpha": [0.0, 0.1, 1.0],
     "reg_lambda": [0.0, 0.1, 1.0],
-    "random_state": [42],
+    "random_state": [0],
+    "verbose": [-1],
     "n_jobs": [-1],
 }
 
@@ -280,7 +281,7 @@ class ResidualDoubleCVSafe(ResidualDouble):
         distr_params=None,
         use_y_pred=False,
         cv=None,
-        min_scale=0.05): # +/- 8.6%
+        min_scale=0.01): # +/- 8.6%
         super().__init__(estimator,
                         estimator_resid,
                         residual_trafo,

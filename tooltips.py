@@ -23,6 +23,7 @@ help_query_box = """# Write queries using field-based filters and logical operat
 - (product: (rapid OR nhanh) AND hiv) AND (posting_date >= 01-01-2025)
 
 **Hint**
+
 Each query should target a single product or closely related product group. Mixing different products may lead to misleading price comparisons and unreliable predictions. Use filters later to explore specific scenarios.
 """
 

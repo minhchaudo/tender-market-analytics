@@ -49,11 +49,13 @@ def handle_search_click():
     df[colnames.closing_date] = pd.to_datetime(df[colnames.closing_date], format="%Y-%m-%d %H:%M:%S")
 
     st.session_state["data"] = df
+    st.session_state["filtered_data"] = None
     st.session_state[f"Filter: {colnames.investor}"] = set()
     st.session_state[f"Filter: {colnames.contractor_name}"] = set()
     st.session_state[f"Filter: {colnames.manufacturer}"] = set()
     st.session_state[f"Filter: {colnames.country_origin}"] = set()
     st.session_state[f"Filter: {colnames.region_origin}"] = set()
+    st.session_state[f"Filter: {colnames.province}"] = set()
     st.session_state[f"Filter: {colnames.quantity}"] = (
         df[colnames.quantity].min(),
         df[colnames.quantity].max(),
@@ -81,11 +83,12 @@ def handle_search_click():
 
     st.session_state["predict_error"] = None
     st.session_state["predict it"] = False
-    st.session_state["model_default"] = None
-    st.session_state["model_auto"] = None
-    st.session_state["prediction"] = None
-
-
+    st.session_state["model_default_all"] = None
+    st.session_state["model_default_filtered"] = None 
+    st.session_state["model_auto_all"] = None
+    st.session_state["model_auto_filtered"] = None
+    st.session_state["model_filtered_training_data"] = None
+    
 def handle_predict_click():
     banner_predict.empty()
     if not (
@@ -106,7 +109,7 @@ def handle_predict_click():
 def generate_label_filter(cname: str):
     label_col, button_col = st.columns([10, 1], gap="small", vertical_alignment="center")
     with label_col:
-        st.markdown(f"**Filter {cname.replace("_", " ")}**", help=tooltip_filter_map[cname])
+        st.markdown(f"**{cname.replace("_", " ").capitalize()}**", help=tooltip_filter_map[cname])
     with button_col:
         st.button(
             "🗑️",
@@ -122,7 +125,7 @@ def generate_label_filter(cname: str):
         st.session_state[f"selectbox: {cname}"] = None
 
     st.selectbox(
-        f"Filter {cname.replace("_", " ")}",
+        f"{cname.replace("_", " ").capitalize()}",
         sorted(set(st.session_state["data"][cname])),
         key=f"selectbox: {cname}",
         index=None,
@@ -161,7 +164,7 @@ def generate_checkboxes(cname: str):
 def generate_slider(cname: str):
     df = st.session_state["data"]
 
-    st.markdown(f"**Filter {cname.replace("_", " ")}**", help=tooltip_filter_map[cname])
+    st.markdown(f"**{cname.replace("_", " ").capitalize()}**", help=tooltip_filter_map[cname])
     st.slider(
         f"**{cname.replace("_", " ").capitalize()}**",
         label_visibility="collapsed",
@@ -178,7 +181,7 @@ def generate_date_range(cname: str):
 
     left_col, right_col = st.columns([5, 1], gap="xxlarge", vertical_alignment="center")
     with left_col:
-        st.markdown(f"**Filter {cname.replace("_", " ")}**", help=tooltip_filter_map[cname])
+        st.markdown(f"**{cname.replace("_", " ").capitalize()}**", help=tooltip_filter_map[cname])
 
     def reset_date(cname, min_date, max_date):
         st.session_state[f"Filter: min {cname}"] = min_date
@@ -211,8 +214,6 @@ def generate_date_range(cname: str):
             format="DD-MM-YYYY",
             key=f"Filter: max {cname}",
         )
-        print("="*20)
-        print(f"Filter: max {cname}" in st.session_state)
 
 
 st.set_page_config(page_title="Tender Market Analytics", layout="wide")
@@ -221,8 +222,10 @@ left_col, right_col = st.columns([3, 7], gap="large")
 with left_col:
     with st.container(height=650, border=True):
         with st.form("Query", border=False):
-            st.markdown("**Search query**", help=help_query_box)
+            st.markdown("### Search query", help=help_query_box)
+            raw_df_rows_count = st.markdown(f"Retrieved **0** rows.")
             st.text_area("Search query", height=200, key="text: query", label_visibility="collapsed")
+            st.form_submit_button("Search", on_click=handle_search_click, width="stretch")
             banner_search = st.empty()
             with banner_search:
                 if "query_error" in st.session_state and st.session_state["query_error"] is not None:
@@ -233,13 +236,21 @@ with left_col:
                     else:
                         # st.error(str(st.session_state["query_error"]))
                         st.error("An error has occurred! Please check your query and try again. Hint: if your query involves multiple fields, wrap field-specific conditions in parentheses.")
-            st.form_submit_button("Search", on_click=handle_search_click, width="stretch")
+            with raw_df_rows_count:
+                if "data" in st.session_state and not st.session_state["data"].empty:
+                    count = len(st.session_state["data"])
+                else:
+                    count = 0
+                st.markdown(f"Retrieved **{count}** rows.")
         if "data" in st.session_state and not st.session_state["data"].empty:
+            st.markdown(f"### Filter")
+            filtered_df_rows_count = st.markdown(f"Filtered **{len(st.session_state["data"])}** rows.")
             generate_label_filter(colnames.investor)
             generate_label_filter(colnames.contractor_name)
             generate_label_filter(colnames.manufacturer)
             generate_label_filter(colnames.country_origin)
             generate_label_filter(colnames.region_origin)
+            generate_label_filter(colnames.province)
             generate_slider(colnames.quantity)
             generate_slider(colnames.unit_price)
             generate_slider(colnames.total_price)
@@ -301,6 +312,11 @@ with right_col:
                         if st.session_state[f"Filter: {colnames.region_origin}"]
                         else True
                     )
+                    & (
+                        raw_df[colnames.province].isin(st.session_state[f"Filter: {colnames.province}"])
+                        if st.session_state[f"Filter: {colnames.province}"]
+                        else True
+                    )
                     & (raw_df[colnames.quantity].between(*st.session_state[f"Filter: {colnames.quantity}"]))
                     & (raw_df[colnames.unit_price].between(*st.session_state[f"Filter: {colnames.unit_price}"]))
                     & (raw_df[colnames.total_price].between(*st.session_state[f"Filter: {colnames.total_price}"]))
@@ -317,9 +333,17 @@ with right_col:
                         )
                     )
                 ]
+                with filtered_df_rows_count:
+                    if len(df) == len(raw_df):
+                        st.markdown(f"No filter applied.")
+                    else:
+                        st.markdown(f"Filtered **{len(df)}** rows.")
                 if df.empty:
                     st.info("No result. Try adjusting your filters.")
                 else:
+                    st.session_state["filtered_data"] = df
+
+                    df = df.copy()
                     if df[colnames.unit_price].max() < 1e3:
                         unit_unit_price = "VND"
                     elif df[colnames.unit_price].max() < 1e6:
@@ -803,16 +827,29 @@ with right_col:
                                 min_value=0,
                                 help=tooltip_predict_form_map["cost"]
                             )
-                    banner_predict = st.empty()
-                    with banner_predict:
-                        if st.session_state["predict_error"] != None:
-                            st.error("Please fill all required fields!")
-                    _, class_space, button_space, _ = st.columns([2.5, 1.5, 2, 2.5], gap="small", vertical_alignment="bottom")
+                    _, data_space, class_space, button_space, _ = st.columns([1, 3.5, 1.5, 2, 1], gap="small", vertical_alignment="bottom")
+                    options = ["All queried data (recommended)"]
+                    if len(st.session_state["filtered_data"]) < len(st.session_state["data"]):
+                        options.append("Filtered data (advanced)")
+                    with data_space:
+                        if len(st.session_state["filtered_data"]) == len(st.session_state["data"]):
+                            st.session_state["Predict: training_data"] = "All queried data (recommended)"
+                        st.selectbox("Training data", options, key="Predict: training_data", help=help_training_data)
+
                     with class_space:
                         st.selectbox("Model class", ["Default", "Auto"], key=f"Predict: model_class", help=help_model_class)
                     with button_space:
                         st.form_submit_button("Fit & predict", on_click=handle_predict_click, width="stretch")
+
+                    banner_predict = st.empty()
+                    with banner_predict:
+                        if st.session_state["predict_error"] != None:
+                            st.error("Please fill in all required fields!")
+
                 
+                model_class = "default" if st.session_state["Predict: model_class"] == "Default" else "auto"
+                training_data = "all" if st.session_state["Predict: training_data"] == "All queried data (recommended)" else "filtered"
+
                 progress_space = st.empty()
                 left_col, right_col = st.columns([3, 7])
                 left_placeholder = left_col.empty()
@@ -827,13 +864,25 @@ with right_col:
                             with progress_space:
                                 st.progress(tqdm.n/tqdm.total, f"Fitting model {trained_models}/{total_models}")
                         return update_pbar_and_caption
-                    if st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"] == None:
-                        model, _, _ = train_model(st.session_state["data"], st.session_state["Predict: model_class"].lower(), handle_progress_update)
-                        progress_space.empty()
-                        st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"] = model
+                    
+                    if training_data == "filtered":
+                        old_ids = st.session_state["model_filtered_training_data"]
+                        curr_ids = st.session_state["filtered_data"]["id"].values
+                        if st.session_state[f"model_{model_class}_filtered"] is None or (len(old_ids) != len(curr_ids)) or not all(old_ids == curr_ids):
+                            model, _, _ = train_model(st.session_state["filtered_data"], model_class, handle_progress_update)
+                            progress_space.empty()
+                            st.session_state["model_filtered_training_data"] = curr_ids
+                            st.session_state[f"model_{model_class}_filtered"] = model
+                        else:
+                            model = st.session_state[f"model_{model_class}_filtered"]
                     else:
-                        model = st.session_state[f"model_{st.session_state["Predict: model_class"].lower()}"]
-                    st.session_state["prediction"] = predict(
+                        if st.session_state[f"model_{model_class}_all"] is None:
+                            model, _, _ = train_model(st.session_state["data"], model_class, handle_progress_update)
+                            progress_space.empty()
+                            st.session_state[f"model_{model_class}_all"] = model
+                        else:
+                            model = st.session_state[f"model_{model_class}_all"]
+                    pred_dist = predict(
                         {
                             colnames.investor: st.session_state[f"Predict: {colnames.investor}"],
                             colnames.province: st.session_state[f"Predict: {colnames.province}"],
@@ -845,9 +894,9 @@ with right_col:
                         model,
                     )
 
-                    if "prediction" in st.session_state and st.session_state["prediction"] != None:
+                    if pred_dist != None:
                         st.subheader("Model performance on historical data")
-                        metrics = st.session_state[f"model_{st.session_state['Predict: model_class'].lower()}"]["metrics"]
+                        metrics = st.session_state[f"model_{model_class}_{training_data}"]["metrics"]
                         _, content, _ = st.columns([3, 4, 3])
                         with content:
                             # Header
@@ -878,8 +927,6 @@ with right_col:
                             with col2:
                                 st.markdown(f"{metrics['Coverage_90']*100:.1f}%")
                                 
-                        dist = st.session_state["prediction"]
-
                         def to_scalar(value):
                             arr = np.asarray(value)
                             if arr.size == 0:
@@ -887,14 +934,14 @@ with right_col:
                             return float(arr.reshape(-1)[0])
 
                         quantile_levels = [0.1, 0.25, 0.5, 0.75, 0.9]
-                        quantiles_log = {q: to_scalar(dist.ppf(q)) for q in quantile_levels}
+                        quantiles_log = {q: to_scalar(pred_dist.ppf(q)) for q in quantile_levels}
 
                         def exp_safe(v):
                             return float(np.exp(np.clip(v, -700, 700)))
 
                         quantiles = {q: exp_safe(quantiles_log[q]) for q in quantile_levels}
-                        mu_log = to_scalar(getattr(dist, "mu", np.nan))
-                        sigma_log = to_scalar(getattr(dist, "sigma", np.nan))
+                        mu_log = to_scalar(getattr(pred_dist, "mu", np.nan))
+                        sigma_log = to_scalar(getattr(pred_dist, "sigma", np.nan))
                         mean_original = np.exp(mu_log + 0.5 * (sigma_log ** 2)) if np.isfinite(mu_log) and np.isfinite(sigma_log) else np.nan
                         median_original = np.exp(mu_log) if np.isfinite(mu_log) else np.nan
                         std_original = (
@@ -903,8 +950,8 @@ with right_col:
                             else np.nan
                         )
 
-                        y_low = to_scalar(dist.ppf(0.001))
-                        y_high = to_scalar(dist.ppf(0.999))
+                        y_low = to_scalar(pred_dist.ppf(0.001))
+                        y_high = to_scalar(pred_dist.ppf(0.999))
                         if not (np.isfinite(y_low) and np.isfinite(y_high)) or y_low >= y_high:
                             y_low = quantiles_log[0.1]
                             y_high = quantiles_log[0.9]
@@ -915,11 +962,11 @@ with right_col:
                         x_grid = np.exp(np.clip(y_grid, -700, 700))
 
                         try:
-                            pdf_y = np.asarray(dist.pdf(y_grid), dtype=float).reshape(-1)
+                            pdf_y = np.asarray(pred_dist.pdf(y_grid), dtype=float).reshape(-1)
                             if pdf_y.size != y_grid.size:
                                 raise ValueError("Unexpected pdf output shape")
                         except Exception:
-                            pdf_y = np.array([to_scalar(dist.pdf(y)) for y in y_grid], dtype=float)
+                            pdf_y = np.array([to_scalar(pred_dist.pdf(y)) for y in y_grid], dtype=float)
 
                         with np.errstate(divide="ignore", invalid="ignore"):
                             pdf_values = pdf_y / x_grid
@@ -1030,11 +1077,11 @@ with right_col:
                                 log_x_vals = np.log(np.clip(x_vals, 1e-12, None))
 
                                 try:
-                                    cdf_vals = np.asarray(dist.cdf(log_x_vals), dtype=float).reshape(-1)
+                                    cdf_vals = np.asarray(pred_dist.cdf(log_x_vals), dtype=float).reshape(-1)
                                     if cdf_vals.size != x_vals.size:
                                         raise ValueError("Unexpected cdf output shape")
                                 except Exception:
-                                    cdf_vals = np.array([to_scalar(dist.cdf(np.log(max(x, 1e-12)))) for x in x_vals], dtype=float)
+                                    cdf_vals = np.array([to_scalar(pred_dist.cdf(np.log(max(x, 1e-12)))) for x in x_vals], dtype=float)
 
                                 survival_vals = np.clip(1.0 - cdf_vals, 0.0, 1.0)
                                 expected_profit = (x_vals * quantity - cost) * survival_vals
