@@ -1574,6 +1574,7 @@ with right_col:
                                 )
                     st.subheader("Pricing strategy recommendation")
                     llm_contain = st.chat_message(name="assistant")
+                    content = llm_contain.empty()
                     if st.session_state["latest_pred"]["summary"] is None:
                         prompt = get_info(
                             df=st.session_state["latest_pred"]["training_df"],
@@ -1584,24 +1585,27 @@ with right_col:
                             filtered=st.session_state["latest_pred"]["training_data"] == "filtered",
                             )
                         print(prompt)
-                        header_contain = st.empty()
-                        llm_contain = st.empty()
                         for t in range(3):
                             try:
-                                with header_contain:
-                                    st.subheader("Pricing strategy recommendation")
-                                with llm_contain:
-                                    llm_res = st.write_stream(llm(prompt))
-                                    st.session_state["latest_pred"]["summary"] = llm_res
-                                    break
+                                with content.container():
+                                    with st.spinner("Thinking..." if t == 0 else f"Retry thinking {t}/2..."):
+                                        llm_res = st.write_stream(llm(prompt))
+                                        st.session_state["latest_pred"]["summary"] = llm_res
+                                        break
                             except Exception as e:
-                                llm_contain.empty()
+                                print("=========== Query error ===========")
+                                print(str(e))
                                 st.session_state["latest_pred"]["summary"] = None
-                                if t < 3:
+                                if t < 2:
                                     time.sleep(2)
+                                else:
+                                    with content.container():
+                                        with st.empty():
+                                            st.write("Connection error! Please check your network connection and API key and try again!")
                     else:
-                        with llm_contain:
-                            st.write(st.session_state["latest_pred"]["summary"])
+                        with content.container():
+                            with st.empty():
+                                st.write(st.session_state["latest_pred"]["summary"])
 
                             
 
