@@ -1,1 +1,7 @@
 venv 
+*.ipynb
+*.xlsx
+*.csv
+.env
+__pycache__
+predictive_modeling.py
