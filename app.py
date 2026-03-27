@@ -1600,12 +1600,10 @@ with right_col:
                                     time.sleep(2)
                                 else:
                                     with content.container():
-                                        with st.empty():
-                                            st.write("Connection error! Please check your network connection and API key and try again!")
+                                        st.write("Connection error! Please check your network connection and API key and try again!")
                     else:
                         with content.container():
-                            with st.empty():
-                                st.write(st.session_state["latest_pred"]["summary"])
+                            st.write(st.session_state["latest_pred"]["summary"])
 
                             
 
