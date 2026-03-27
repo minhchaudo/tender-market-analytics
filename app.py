@@ -43,6 +43,9 @@ def handle_search_click():
     else:
         try:
             df = query(query_str)
+        except SQLCompileError as e:
+            st.session_state["query_error"] = e
+            return
         except Exception as e:
             st.session_state["query_error"] = e
             return
@@ -104,7 +107,7 @@ def handle_predict_click():
         and (st.session_state[f"Predict: {colnames.country_origin}"] is not None)
         and (st.session_state[f"Predict: model_class"] is not None)
     ):
-        st.session_state["predict_error"] = 1
+        st.session_state["predict_error"] = "Please fill all required fields!"
     else:
         st.session_state["predict_error"] = None
         st.session_state["predict it"] = True
@@ -1206,7 +1209,7 @@ with right_col:
                     banner_predict = st.empty()
                     with banner_predict:
                         if st.session_state["predict_error"] != None:
-                            st.error("Please fill in all required fields!")
+                            st.error(str(st.session_state["predict_error"]))
 
                 
                 model_class = "default" if st.session_state["Predict: model_class"] == "Default" else "auto"
@@ -1227,37 +1230,44 @@ with right_col:
                                 st.progress(tqdm.n/tqdm.total, f"Fitting model {trained_models}/{total_models}")
                         return update_pbar_and_caption
                     
-                    if training_data == "filtered":
-                        old_ids = st.session_state["model_filtered_training_data"]
-                        curr_ids = st.session_state["filtered_data"]["id"].values
-                        if st.session_state[f"model_{model_class}_filtered"] is None or (len(old_ids) != len(curr_ids)) or not all(old_ids == curr_ids):
-                            model, _, _ = train_model(st.session_state["filtered_data"], model_class, handle_progress_update)
-                            progress_space.empty()
-                            st.session_state["model_filtered_training_data"] = curr_ids
-                            st.session_state[f"model_{model_class}_filtered"] = model
+                    try:
+                        if training_data == "filtered":
+                            old_ids = st.session_state["model_filtered_training_data"]
+                            curr_ids = st.session_state["filtered_data"]["id"].values
+                            if st.session_state[f"model_{model_class}_filtered"] is None or (len(old_ids) != len(curr_ids)) or not all(old_ids == curr_ids):
+                                model, _, _ = train_model(st.session_state["filtered_data"], model_class, handle_progress_update)
+                                progress_space.empty()
+                                st.session_state["model_filtered_training_data"] = curr_ids
+                                st.session_state[f"model_{model_class}_filtered"] = model
+                            else:
+                                model = st.session_state[f"model_{model_class}_filtered"]
                         else:
-                            model = st.session_state[f"model_{model_class}_filtered"]
-                    else:
-                        if st.session_state[f"model_{model_class}_all"] is None:
-                            model, _, _ = train_model(st.session_state["data"], model_class, handle_progress_update)
-                            progress_space.empty()
-                            st.session_state[f"model_{model_class}_all"] = model
-                        else:
-                            model = st.session_state[f"model_{model_class}_all"]
-                    user_config = {
-                        colnames.investor: st.session_state[f"Predict: {colnames.investor}"],
-                        colnames.province: st.session_state[f"Predict: {colnames.province}"],
-                        colnames.quantity: st.session_state[f"Predict: {colnames.quantity}"],
-                        colnames.closing_date: st.session_state[f"Predict: {colnames.closing_date}"],
-                        colnames.manufacturer: st.session_state[f"Predict: {colnames.manufacturer}"],
-                        colnames.country_origin: st.session_state[f"Predict: {colnames.country_origin}"],
-                        "cost": st.session_state[f"Predict: cost"] * 1e-3
-                    }
-                    pred_dist = predict(
-                        user_config,
-                        model,
-                    )
-                    st.session_state["latest_pred"] = {"pred_dist": pred_dist, "metrics": model["metrics"], "training_data": training_data, "training_df": st.session_state["data"] if training_data == "all" else st.session_state["filtered_data"], "user_config": user_config, "summary": None}
+                            if st.session_state[f"model_{model_class}_all"] is None:
+                                model, _, _ = train_model(st.session_state["data"], model_class, handle_progress_update)
+                                progress_space.empty()
+                                st.session_state[f"model_{model_class}_all"] = model
+                            else:
+                                model = st.session_state[f"model_{model_class}_all"]
+
+                        user_config = {
+                            colnames.investor: st.session_state[f"Predict: {colnames.investor}"],
+                            colnames.province: st.session_state[f"Predict: {colnames.province}"],
+                            colnames.quantity: st.session_state[f"Predict: {colnames.quantity}"],
+                            colnames.closing_date: st.session_state[f"Predict: {colnames.closing_date}"],
+                            colnames.manufacturer: st.session_state[f"Predict: {colnames.manufacturer}"],
+                            colnames.country_origin: st.session_state[f"Predict: {colnames.country_origin}"],
+                            "cost": st.session_state[f"Predict: cost"] * 1e-3
+                        }
+                        pred_dist = predict(
+                            user_config,
+                            model,
+                        )
+                        st.session_state["latest_pred"] = {"pred_dist": pred_dist, "metrics": model["metrics"], "training_data": training_data, "training_df": st.session_state["data"] if training_data == "all" else st.session_state["filtered_data"], "user_config": user_config, "summary": None}
+                        st.session_state["predict_error"] = None
+                    except Exception as e:
+                        progress_space.empty()
+                        st.session_state["predict_error"] = f"Prediction failed: {e}"
+                        st.session_state["latest_pred"] = None
 
                 if st.session_state["latest_pred"] is not None:
                     pred_dist = st.session_state["latest_pred"]["pred_dist"]
@@ -1467,8 +1477,8 @@ with right_col:
                                 width="stretch"
                             )
 
-                        quantity = st.session_state["latest_pred"]["quantity"]
-                        cost = st.session_state["latest_pred"]["cost"]
+                        quantity = st.session_state["latest_pred"]["user_config"][colnames.quantity]
+                        cost = st.session_state["latest_pred"]["user_config"]["cost"]
                         if cost > 0:
                             st.subheader("Proxy for expected profit", help=help_profit_proxy)
                             _, plot_space, _ = st.columns([1, 8, 1])
@@ -1563,6 +1573,8 @@ with right_col:
                                     ),
                                     width="stretch",
                                 )
+                    st.subheader("Pricing strategy recommendation")
+                    llm_contain = st.chat_message(name="assistant")
                     if st.session_state["latest_pred"]["summary"] is None:
                         prompt = get_info(
                             df=st.session_state["latest_pred"]["training_df"],
@@ -1573,11 +1585,9 @@ with right_col:
                             filtered=st.session_state["latest_pred"]["training_data"] == "filtered",
                             )
                         print(prompt)
-                        llm_contain = st.empty()
                         for t in range(3):
                             try:
                                 with llm_contain:
-                                    st.subheader("Pricing strategy recommendation")
                                     llm_res = st.write_stream(llm(prompt))
                                     st.session_state["latest_pred"]["summary"] = llm_res
                                     print(llm_res)
@@ -1587,8 +1597,8 @@ with right_col:
                                 if t < 3:
                                     time.sleep(2)
                     else:
-                        st.subheader("Pricing strategy recommendation")
-                        st.write(st.session_state["latest_pred"]["summary"])
+                        with llm_contain:
+                            st.write(st.session_state["latest_pred"]["summary"])
 
                             
 
