@@ -224,10 +224,23 @@ def generate_date_range(cname: str):
 
 
 st.set_page_config(page_title="Tender Market Analytics", layout="wide")
+st.markdown("""
+<style>
+    [data-testid="stHeader"] {
+        display: none !important;
+    }
+    [data-testid="stMainBlockContainer"] {
+        padding-top: 0rem !important;
+        padding-bottom: 0rem !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 st.title("Tender Market Analytics", text_alignment="center")
 left_col, right_col = st.columns([3, 7], gap="large")
+ALL_CONTENT_HEIGHT = 700
 with left_col:
-    with st.container(height=650, border=True):
+    st.markdown("<div style='height: 58px;'></div>", unsafe_allow_html=True)
+    with st.container(height=ALL_CONTENT_HEIGHT, border=True):
         with st.form("Query", border=False):
             st.markdown("### Search query", help=help_query_box)
             raw_df_rows_count = st.markdown(f"Retrieved **0** rows.")
@@ -266,7 +279,7 @@ with left_col:
 with right_col:
     tab1, tab2 = st.tabs(["Analyze", "Predict"])
     with tab1:
-        with st.container(height=600, border=True):
+        with st.container(height=ALL_CONTENT_HEIGHT, border=True):
             if not "data" in st.session_state:
                 st.info("Query something, insight will be drawn here.")
             elif st.session_state["data"].empty:
@@ -1136,7 +1149,7 @@ with right_col:
                             width="stretch",
                         )
     with tab2:
-        with st.container(height=600, border=True):
+        with st.container(height=ALL_CONTENT_HEIGHT, border=True):
             if not "data" in st.session_state:
                 st.info("Query something before predicting.")
             elif st.session_state["data"].empty:
