@@ -1251,6 +1251,7 @@ with right_col:
                         colnames.closing_date: st.session_state[f"Predict: {colnames.closing_date}"],
                         colnames.manufacturer: st.session_state[f"Predict: {colnames.manufacturer}"],
                         colnames.country_origin: st.session_state[f"Predict: {colnames.country_origin}"],
+                        "cost": st.session_state[f"Predict: cost"] * 1e-3
                     }
                     pred_dist = predict(
                         user_config,
@@ -1466,8 +1467,8 @@ with right_col:
                                 width="stretch"
                             )
 
-                        quantity = st.session_state[f"Predict: {colnames.quantity}"]
-                        cost = st.session_state["Predict: cost"] / 1e3
+                        quantity = st.session_state["latest_pred"]["quantity"]
+                        cost = st.session_state["latest_pred"]["cost"]
                         if cost > 0:
                             st.subheader("Proxy for expected profit", help=help_profit_proxy)
                             _, plot_space, _ = st.columns([1, 8, 1])
@@ -1569,7 +1570,7 @@ with right_col:
                             user_config=st.session_state["latest_pred"]["user_config"],
                             pred_metrics=st.session_state["latest_pred"]["metrics"],
                             pred_dist=st.session_state["latest_pred"]["pred_dist"],
-                            filtered=st.session_state["latest_pred"]["training_data"] == "filtered"
+                            filtered=st.session_state["latest_pred"]["training_data"] == "filtered",
                             )
                         print(prompt)
                         llm_contain = st.empty()
