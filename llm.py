@@ -1,10 +1,10 @@
 from openai import OpenAI
 import os
+from dotenv import load_dotenv
 
-SYSTEM_PROMPT = (
-	"You are a expert tender market analytics about Vietnamese public investment sector. "
-	"Answer clearly and concise, and avoid hallucinations."
-)
+load_dotenv()
+
+SYSTEM_PROMPT = "You are an expert in Vietnamese public procurement market intelligence. Vietnamese public procurement operates on the basis of competitive bidding, where multiple contractors (sellers) bid their products, and investors (buyers) will choose products based on technical requirements and pricing. Most influential factors include: product manufacturer, country of origin, and region of origin (proxy for quality), along with bid price (lowest wins). We are developing an application to support contractors (users) by recommending optimal pricing strategies that maximize profit and chances of winning. We will give you a summary of historical data, information on user's product, and our model's predictions of the optimal pricing strategy. Your responsibility is to (1) closely analyze all given information and (2) write a concise answer (at most 300 words) that summarizes key information and recommends the best (range of) unit price. Note that your answer is user-facing. IMPORTANT: BASED ALL YOUR JUDGEMENTS ON THE GIVEN INFORMATION. Add unit (VND) to all prices. Information starts:"
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -23,9 +23,9 @@ def llm(prompt):
 		],
 		stream=True
 	)
-	try:
-		for event in stream:
-			if event.type == "response.output_text.delta":
-				yield event.delta
-	except Exception as e:
-		yield f"LLM error: {e}"
+	for event in stream:
+		if event.type == "response.output_text.delta":
+			yield event.delta
+
+
+
