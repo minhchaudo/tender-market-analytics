@@ -108,7 +108,6 @@ def handle_predict_click():
     else:
         st.session_state["predict_error"] = None
         st.session_state["predict it"] = True
-        st.session_state["latest_pred"] = None
 
 
 def generate_label_filter(cname: str):
@@ -1467,8 +1466,8 @@ with right_col:
                                 width="stretch"
                             )
 
-                        quantity = st.session_state["latest_pred"]["quantity"]
-                        cost = st.session_state["latest_pred"]["cost"]
+                        quantity = st.session_state["latest_pred"]["user_config"]["quantity"]
+                        cost = st.session_state["latest_pred"]["user_config"]["cost"]
                         if cost > 0:
                             st.subheader("Proxy for expected profit", help=help_profit_proxy)
                             _, plot_space, _ = st.columns([1, 8, 1])
@@ -1573,17 +1572,19 @@ with right_col:
                             filtered=st.session_state["latest_pred"]["training_data"] == "filtered",
                             )
                         print(prompt)
+                        header_contain = st.empty()
                         llm_contain = st.empty()
                         for t in range(3):
                             try:
-                                with llm_contain:
+                                with header_contain:
                                     st.subheader("Pricing strategy recommendation")
+                                with llm_contain:
                                     llm_res = st.write_stream(llm(prompt))
                                     st.session_state["latest_pred"]["summary"] = llm_res
-                                    print(llm_res)
                                     break
                             except Exception as e:
                                 llm_contain.empty()
+                                st.session_state["latest_pred"]["summary"] = None
                                 if t < 3:
                                     time.sleep(2)
                     else:
