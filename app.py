@@ -12,25 +12,16 @@ import time
 
 class colnames:
     contractor_name = "contractor_name"
-    product_name = "product_name"
-    product_code = "product_code"
     product = "product"
-    raw_manufacturer = "manufacturer_raw"
-    raw_origin = "origin_raw"
     country_origin = "country_of_origin"
     region_origin = "region_of_origin"
     quantity = "quantity"
     unit = "unit"
     unit_price = "unit_price"
     total_price = "total_price"
-    itb_code = "itb_code"
-    url = "URL"
-    bid_package_name = "bid_package_name"
     investor = "investor"
-    location = "location"
     posting_date = "posting_date"
     closing_date = "closing_date"
-    origin = "origin"
     manufacturer = "manufacturer"
     province = "province"
 
@@ -89,7 +80,7 @@ def handle_search_click():
     st.session_state[f"Predict: {colnames.closing_date}"] = None
     st.session_state[f"Predict: {colnames.manufacturer}"] = None
     st.session_state[f"Predict: {colnames.country_origin}"] = None
-    st.session_state[f"Predict: cost"] = 0
+    st.session_state[f"Predict: cost"] = None
 
     st.session_state["predict_error"] = None
     st.session_state["predict it"] = False
@@ -289,7 +280,7 @@ with right_col:
     with tab1:
         with st.container(height=ALL_CONTENT_HEIGHT, border=True):
             if not "data" in st.session_state:
-                st.info("Query something, insight will be drawn here.")
+                st.info("Query something, insights will be drawn here.")
             elif st.session_state["data"].empty:
                 st.info("No result. Try another query.")
             else:
@@ -371,6 +362,11 @@ with right_col:
                 else:
                     st.session_state["filtered_data"] = df
 
+                    all_cols = [
+                        v for k, v in colnames.__dict__.items()
+                        if not k.startswith("__") and not callable(v)
+                    ]
+                    df = df[all_cols]
                     df = df.copy()
                     if df[colnames.unit_price].max() < 1e3:
                         unit_price_factor = 1
@@ -1159,9 +1155,9 @@ with right_col:
     with tab2:
         with st.container(height=ALL_CONTENT_HEIGHT, border=True):
             if not "data" in st.session_state:
-                st.info("Query something before predicting.")
+                st.info("Query something before predicting pricing strategies.")
             elif st.session_state["data"].empty:
-                st.info("No result. Try another query before predicting.")
+                st.info("No result. Try another query before predicting pricing strategies.")
             else:
                 with st.form("Parameters"):
                     st.subheader("Information for winning bid price prediction")
@@ -1274,7 +1270,7 @@ with right_col:
                             colnames.closing_date: st.session_state[f"Predict: {colnames.closing_date}"],
                             colnames.manufacturer: st.session_state[f"Predict: {colnames.manufacturer}"],
                             colnames.country_origin: st.session_state[f"Predict: {colnames.country_origin}"],
-                            "cost": st.session_state[f"Predict: cost"] * 1e-3
+                            "cost": st.session_state[f"Predict: cost"] * 1e-3 if st.session_state[f"Predict: cost"] is not None else None
                         }
                         pred_dist = predict(
                             user_config,
@@ -1507,7 +1503,7 @@ with right_col:
 
                         quantity = st.session_state["latest_pred"]["user_config"][colnames.quantity]
                         cost = st.session_state["latest_pred"]["user_config"]["cost"]
-                        if cost > 0:
+                        if cost is not None:
                             st.subheader("Proxy for expected profit", help=help_profit_proxy)
                             _, plot_space, _ = st.columns([1, 8, 1])
                             x_vals = density_df["x"].to_numpy(dtype=float)
