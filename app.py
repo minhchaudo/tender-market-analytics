@@ -34,19 +34,22 @@ class colnames:
     manufacturer = "manufacturer"
     province = "province"
 
+class EmptyQueryError(Exception):
+    pass
+class PredictFieldMissingError(Exception):
+    pass
+class TrainAndPredictError(Exception):
+    pass
 
 def handle_search_click():
     banner_search.empty()
     query_str = st.session_state["text: query"].strip()
     if query_str == "":
-        st.session_state["query_error"] = 1
+        st.session_state["query_error"] = EmptyQueryError()
         return
     else:
         try:
             df = query(query_str)
-        except SQLCompileError as e:
-            st.session_state["query_error"] = e
-            return
         except Exception as e:
             st.session_state["query_error"] = e
             return
@@ -108,7 +111,7 @@ def handle_predict_click():
         and (st.session_state[f"Predict: {colnames.country_origin}"] is not None)
         and (st.session_state[f"Predict: model_class"] is not None)
     ):
-        st.session_state["predict_error"] = "Please fill all required fields!"
+        st.session_state["predict_error"] = PredictFieldMissingError()
     else:
         st.session_state["predict_error"] = None
         st.session_state["predict it"] = True
@@ -236,6 +239,9 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+global_error_banner = st.empty()
+global_error_banner.empty()
+
 st.title("Tender Market Analytics", text_alignment="center")
 left_col, right_col = st.columns([3, 7], gap="large")
 ALL_CONTENT_HEIGHT = 700
@@ -250,12 +256,13 @@ with left_col:
             banner_search = st.empty()
             with banner_search:
                 if "query_error" in st.session_state and st.session_state["query_error"] is not None:
-                    if st.session_state["query_error"] == 1:
-                        st.error("Please enter your query first!")
+                    print("=========== Exception ===========")
+                    print(st.session_state["query_error"])
+                    if isinstance(st.session_state["query_error"], EmptyQueryError):
+                        st.error("Please enter your query first.")
                     elif isinstance(st.session_state["query_error"], SQLCompileError):
                         st.error(str(st.session_state["query_error"]))
                     else:
-                        # st.error(str(st.session_state["query_error"]))
                         st.error("An error has occurred! Please check your query and try again. Hint: if your query involves multiple fields, wrap field-specific conditions in parentheses.")
             with raw_df_rows_count:
                 if "data" in st.session_state and not st.session_state["data"].empty:
@@ -1220,9 +1227,7 @@ with right_col:
                         st.form_submit_button("Fit & predict", on_click=handle_predict_click, width="stretch")
 
                     banner_predict = st.empty()
-                    with banner_predict:
-                        if st.session_state["predict_error"] != None:
-                            st.error(str(st.session_state["predict_error"]))
+                    banner_predict.empty()
 
                 
                 model_class = "default" if st.session_state["Predict: model_class"] == "Default" else "auto"
@@ -1279,8 +1284,18 @@ with right_col:
                         st.session_state["predict_error"] = None
                     except Exception as e:
                         progress_space.empty()
-                        st.session_state["predict_error"] = f"Prediction failed: {e}"
+                        st.session_state["predict_error"] = TrainAndPredictError()
                         st.session_state["latest_pred"] = None
+                
+                with banner_predict:
+                    if st.session_state["predict_error"] != None:
+                        e = st.session_state["predict_error"]
+                        print("=========== Exception ===========")
+                        print(e)
+                        if isinstance(e, PredictFieldMissingError):
+                            st.error("Please fill all required fields.")
+                        elif isinstance(e, TrainAndPredictError):
+                            st.error("An error occured in the training and predicting process. Please try again.")
 
                 if st.session_state["latest_pred"] is not None:
                     pred_dist = st.session_state["latest_pred"]["pred_dist"]
@@ -1621,7 +1636,7 @@ with right_col:
                     #                 time.sleep(2)
                     #             else:
                     #                 with content.container():
-                    #                     st.write("Connection error! Please check your network connection and API key and try again!")
+                    #                     st.write("Connection error! Please check your network connection and API key and try again.")
                     # else:
                     #     with content.container():
                     #         st.write(st.session_state["latest_pred"]["summary"])
