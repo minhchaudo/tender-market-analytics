@@ -89,7 +89,7 @@ def handle_search_click():
     st.session_state[f"Predict: {colnames.closing_date}"] = None
     st.session_state[f"Predict: {colnames.manufacturer}"] = None
     st.session_state[f"Predict: {colnames.country_origin}"] = None
-    st.session_state[f"Predict: cost"] = None
+    st.session_state[f"Predict: cost"] = 0
 
     st.session_state["predict_error"] = None
     st.session_state["predict it"] = False
