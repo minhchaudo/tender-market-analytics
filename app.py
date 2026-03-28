@@ -218,7 +218,7 @@ def generate_date_range(cname: str):
         )
 
 
-st.set_page_config(page_title="Tender Market Analytics", layout="wide")
+st.set_page_config(page_title="Tender Analytics Platform", layout="wide")
 st.markdown("""
 <style>
     [data-testid="stHeader"] {
@@ -233,7 +233,7 @@ st.markdown("""
 global_error_banner = st.empty()
 global_error_banner.empty()
 
-st.title("Tender Market Analytics", text_alignment="center")
+st.title("Tender Analytics Platform", text_alignment="center")
 left_col, right_col = st.columns([3, 7], gap="large")
 ALL_CONTENT_HEIGHT = 700
 with left_col:
@@ -1605,37 +1605,37 @@ with right_col:
                         pred_metrics=st.session_state["latest_pred"]["metrics"]
                     )["recommendation_text"]
                     st.write(rec)
-                    # llm_contain = st.chat_message(name="assistant")
-                    # content = llm_contain.empty()
-                    # if st.session_state["latest_pred"]["summary"] is None:
-                    #     prompt = get_info(
-                    #         df=st.session_state["latest_pred"]["training_df"],
-                    #         query=st.session_state["query_str"],
-                    #         user_config=st.session_state["latest_pred"]["user_config"],
-                    #         pred_metrics=st.session_state["latest_pred"]["metrics"],
-                    #         pred_dist=st.session_state["latest_pred"]["pred_dist"],
-                    #         filtered=st.session_state["latest_pred"]["training_data"] == "filtered",
-                    #         )
-                    #     print(prompt)
-                    #     for t in range(3):
-                    #         try:
-                    #             with content.container():
-                    #                 with st.spinner("Thinking..." if t == 0 else f"Retry thinking {t}/2..."):
-                    #                     llm_res = st.write_stream(llm(prompt))
-                    #                     st.session_state["latest_pred"]["summary"] = llm_res
-                    #                     break
-                    #         except Exception as e:
-                    #             print("=========== Query error ===========")
-                    #             print(str(e))
-                    #             st.session_state["latest_pred"]["summary"] = None
-                    #             if t < 2:
-                    #                 time.sleep(2)
-                    #             else:
-                    #                 with content.container():
-                    #                     st.write("Connection error! Please check your network connection and API key and try again.")
-                    # else:
-                    #     with content.container():
-                    #         st.write(st.session_state["latest_pred"]["summary"])
+                    llm_contain = st.chat_message(name="assistant")
+                    content = llm_contain.empty()
+                    if st.session_state["latest_pred"]["summary"] is None:
+                        prompt = get_info(
+                            df=st.session_state["latest_pred"]["training_df"],
+                            query=st.session_state["query_str"],
+                            user_config=st.session_state["latest_pred"]["user_config"],
+                            pred_metrics=st.session_state["latest_pred"]["metrics"],
+                            pred_dist=st.session_state["latest_pred"]["pred_dist"],
+                            filtered=st.session_state["latest_pred"]["training_data"] == "filtered",
+                            )
+                        print(prompt)
+                        for t in range(3):
+                            try:
+                                with content.container():
+                                    with st.spinner("Thinking..." if t == 0 else f"Retry thinking {t}/2..."):
+                                        llm_res = st.write_stream(llm(prompt))
+                                        st.session_state["latest_pred"]["summary"] = llm_res
+                                        break
+                            except Exception as e:
+                                print("=========== Query error ===========")
+                                print(str(e))
+                                st.session_state["latest_pred"]["summary"] = None
+                                if t < 2:
+                                    time.sleep(2)
+                                else:
+                                    with content.container():
+                                        st.write("Connection error! Please check your network connection and API key and try again.")
+                    else:
+                        with content.container():
+                            st.write(st.session_state["latest_pred"]["summary"])
 
                             
 
