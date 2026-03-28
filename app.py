@@ -997,14 +997,29 @@ try:
                                 if rest > 0
                                 else top9
                             )
+
+                            country_order = (
+                                data.groupby(colnames.country_origin)[colnames.total_price]
+                                .sum()
+                                .sort_values(ascending=False)
+                                .index.tolist()
+                            )
+
                             st.altair_chart(
                                 alt.Chart(data)
+                                .transform_calculate(
+                                    total_price_vnd=f"datum['{colnames.total_price}'] * {total_price_factor}"
+                                )
                                 .mark_arc()
                                 .encode(
-                                    theta=alt.Theta(colnames.total_price, title=f"Total price ({unit_total_price})", sort="x"),
+                                    theta=alt.Theta(
+                                        colnames.total_price,
+                                        title=f"Total price ({unit_total_price})",
+                                        sort="x",
+                                    ),
                                     color=alt.Color(
                                         colnames.country_origin,
-                                        title="Country of origin",
+                                        sort=country_order,
                                         legend=alt.Legend(
                                             title="Country of origin",
                                             labelColor="black",
@@ -1013,26 +1028,29 @@ try:
                                             titleFontSize=16,
                                         ),
                                     ),
-                                    order=alt.Order(colnames.total_price, sort="ascending"),
+                                    order=alt.Order(colnames.total_price, sort="descending"),
                                     tooltip=[
                                         alt.Tooltip(
                                             colnames.country_origin,
                                             title="Country of origin",
                                         ),
                                         alt.Tooltip(
-                                            colnames.total_price,
-                                            title=f"Total price ({unit_total_price})",
-                                            format=",.3f",
+                                            "total_price_vnd:Q",
+                                            title="Total price (VND)",
+                                            format=",.0f",
                                         ),
                                     ],
                                 ),
                                 width="stretch",
                             )
+
                         with st.container():
                             st.subheader("Total value by region of origin", help=help_total_value_by_region_origin)
 
                             data_by_origin = (
-                                df.groupby(colnames.region_origin, as_index=False)[colnames.total_price].sum().sort_values(by=colnames.total_price, ascending=False)
+                                df.groupby(colnames.region_origin, as_index=False)[colnames.total_price]
+                                .sum()
+                                .sort_values(by=colnames.total_price, ascending=False)
                             )
                             top9 = data_by_origin.head(9)
                             rest = data_by_origin.iloc[9:][colnames.total_price].sum()
@@ -1055,13 +1073,29 @@ try:
                                 if rest > 0
                                 else top9
                             )
+
+                            region_order = (
+                                data.groupby(colnames.region_origin)[colnames.total_price]
+                                .sum()
+                                .sort_values(ascending=False)
+                                .index.tolist()
+                            )
+
                             st.altair_chart(
                                 alt.Chart(data)
+                                .transform_calculate(
+                                    total_price_vnd=f"datum['{colnames.total_price}'] * {total_price_factor}"
+                                )
                                 .mark_arc()
                                 .encode(
-                                    theta=alt.Theta(colnames.total_price, title=f"Total price ({unit_total_price})", sort="x"),
+                                    theta=alt.Theta(
+                                        colnames.total_price,
+                                        title=f"Total price ({unit_total_price})",
+                                        sort="x",
+                                    ),
                                     color=alt.Color(
                                         colnames.region_origin,
+                                        sort=region_order,
                                         legend=alt.Legend(
                                             title="Region of origin",
                                             labelColor="black",
@@ -1070,13 +1104,13 @@ try:
                                             titleFontSize=16,
                                         ),
                                     ),
-                                    order=alt.Order(colnames.total_price, sort="ascending"),
+                                    order=alt.Order(colnames.total_price, sort="descending"),
                                     tooltip=[
                                         alt.Tooltip(colnames.region_origin, title="Region of origin"),
                                         alt.Tooltip(
-                                            colnames.total_price,
-                                            title=f"Total price ({unit_total_price})",
-                                            format=",.3f",
+                                            "total_price_vnd:Q",
+                                            title="Total price (VND)",
+                                            format=",.0f",
                                         ),
                                     ],
                                 ),
@@ -1656,33 +1690,24 @@ try:
                                         width="stretch",
                                     )
                         st.subheader("Pricing strategy recommendation")
-                        rec = recommend_price(
+                        rule_based_rec = recommend_price(
                             df=st.session_state["latest_pred"]["training_df"],
                             user_config=st.session_state["latest_pred"]["user_config"],
                             pred_dist=st.session_state["latest_pred"]["pred_dist"],
                             pred_metrics=st.session_state["latest_pred"]["metrics"]
                         )["recommendation_text"]
-                        st.write(rec)
+                        st.write(rule_based_rec)
                         llm_sec = st.empty()
                         with llm_sec:
-                            if st.button("Summarize for decision-making"):
+                            if st.button("🦦 Summarize for decision-making"):
                                 llm_contain = st.chat_message(name="assistant", avatar="🦦")
                                 content = llm_contain.empty()
                                 if st.session_state["latest_pred"]["summary"] is None:
-                                    prompt = get_info(
-                                        df=st.session_state["latest_pred"]["training_df"],
-                                        query=st.session_state["query_str"],
-                                        user_config=st.session_state["latest_pred"]["user_config"],
-                                        pred_metrics=st.session_state["latest_pred"]["metrics"],
-                                        pred_dist=st.session_state["latest_pred"]["pred_dist"],
-                                        filtered=st.session_state["latest_pred"]["training_data"] == "filtered",
-                                        )
-                                    print(prompt)
                                     for t in range(3):
                                         try:
                                             with content.container():
                                                 with st.spinner("Thinking..." if t == 0 else f"Retry thinking {t}/2..."):
-                                                    llm_res = st.write_stream(llm(prompt))
+                                                    llm_res = st.write_stream(llm(rule_based_rec))
                                                     st.session_state["latest_pred"]["summary"] = llm_res
                                                     break
                                         except Exception as e:
