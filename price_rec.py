@@ -206,6 +206,24 @@ def get_price_quantiles(pred_dist, quantile_levels):
         "quantiles": quantiles_vnd,
     }
 
+def get_predicted_price_band(pred_dist, quantile_levels=(0.25, 0.5)):
+    q = get_price_quantiles(pred_dist, quantile_levels)["quantiles"]
+    low = q.get(0.25)
+    high = q.get(0.5)
+
+    if low is None or high is None:
+        return None
+
+    low = float(low)
+    high = float(high)
+
+    if not (np.isfinite(low) and np.isfinite(high)):
+        return None
+
+    if low > high:
+        low, high = high, low
+
+    return (low, high)
 
 def _expected_profit_curve(pred_dist, quantity, cost, n_grid=800):
     y_low = to_scalar(pred_dist.ppf(0.001))
@@ -313,14 +331,6 @@ def constrained_profit_summary(pred_dist, quantity, cost, allowed_range, pct_of_
 
 
 def build_band_from_stats(qdict, min_samples=20):
-    """
-    Returns:
-        {
-            "band": (low, high) or None,
-            "band_type": "p25_p75" | "p10_p90" | "min_max" | "point" | "none",
-            "anchor": float or None,
-        }
-    """
     if qdict is None or qdict["n"] == 0:
         return {"band": None, "band_type": "none", "anchor": None}
 
@@ -329,11 +339,9 @@ def build_band_from_stats(qdict, min_samples=20):
     max_val = qdict.get("max")
     unique_n = qdict.get("unique_n", 0)
 
-    # If there is only one unique price, treat it as a point anchor immediately.
     if unique_n == 1 and min_val is not None:
         return {"band": None, "band_type": "point", "anchor": float(min_val)}
 
-    # If sample size is enough and price variation is meaningful, prefer percentile bands.
     if qdict["n"] >= min_samples and q is not None and unique_n >= 5:
         if 0.25 in q and 0.75 in q:
             low, high = float(q[0.25]), float(q[0.75])
@@ -345,7 +353,6 @@ def build_band_from_stats(qdict, min_samples=20):
             if low < high:
                 return {"band": (low, high), "band_type": "p10_p90", "anchor": None}
 
-    # If there are only a few unique price levels, keep the segment but downgrade the band.
     if min_val is not None and max_val is not None:
         min_val, max_val = float(min_val), float(max_val)
         if min_val < max_val:
@@ -435,27 +442,50 @@ def build_logic_steps(
         )
         return steps
 
-    steps.append(
-        f"We then consider the model's prediction and identify a price range that preserves at least 80% of the maximum expected profit. That model-supported range is {format_range_vnd(global_profit_band)}."
-    )
+    if user_config["cost"] is None:
+        steps.append(
+            f"We then consider the model's prediction and use the 25th - 50th percentile range of the predicted winning bid price distribution as the model-supported range. That range is {format_range_vnd(global_profit_band)}."
+        )
 
-    if method == "intersection_of_segment_and_global_profit_band":
-        steps.append(
-            f"We intersected the historical reference range with the model-supported range. The overlap is {format_range_vnd(intersection_band)}."
-        )
-        steps.append(
-            "The **recommended range** is thus the **full overlap**, and the **recommended optimal price** is the **price inside that overlap** that gives **the highest expected profit** (as predicted by the model)."
-        )
+        if method == "intersection_of_segment_and_predicted_q25_q50_band":
+            steps.append(
+                f"We intersected the historical reference range with the model-supported range. The overlap is {format_range_vnd(intersection_band)}."
+            )
+            steps.append(
+                "The **recommended range** is thus the **full overlap**, and the **recommended optimal price** is the **upper end of that overlap**."
+            )
+        else:
+            steps.append(
+                "The historical reference range does not overlap the model-supported range."
+            )
+            steps.append(
+                "The **recommended range** therefore remains the **historical reference range**."
+            )
+            steps.append(
+                "The **recommended optimal price** is the **upper end of the historical reference range**."
+            )
     else:
         steps.append(
-            "The historical reference range does not overlap the model-supported range."
+            f"We then consider the model's prediction and identify a price range that preserves at least 80% of the maximum expected profit. That model-supported range is {format_range_vnd(global_profit_band)}."
         )
-        steps.append(
-            "The **recommended optimal price** is thus the price **within the historical reference range** that gives the **highest expected profit** as predicted by the model."
-        )
-        steps.append(
-            "The **recommended range** includes prices within the **historical reference range** that still **preserve at least 90% of the maximum expected profit** achievable inside that range."
-        )
+
+        if method == "intersection_of_segment_and_global_profit_band":
+            steps.append(
+                f"We intersected the historical reference range with the model-supported range. The overlap is {format_range_vnd(intersection_band)}."
+            )
+            steps.append(
+                "The **recommended range** is thus the **full overlap**, and the **recommended optimal price** is the **price inside that overlap** that gives **the highest expected profit** (as predicted by the model)."
+            )
+        else:
+            steps.append(
+                "The historical reference range does not overlap the model-supported range."
+            )
+            steps.append(
+                "The **recommended optimal price** is thus the price **within the historical reference range** that gives the **highest expected profit** as predicted by the model."
+            )
+            steps.append(
+                "The **recommended range** includes prices within the **historical reference range** that still **preserve at least 90% of the maximum expected profit** achievable inside that range."
+            )
 
     return steps
 
@@ -469,7 +499,7 @@ def build_risk_text(segment_n, segment_unique_n, pred_metrics, segment_source, g
     ]
 
     if pred_metrics is not None:
-        mae_k = pred_metrics.get("MAE")  # thousand VND
+        mae_k = pred_metrics.get("MAE") 
         cov50 = pred_metrics.get("Coverage_50")
         cov90 = pred_metrics.get("Coverage_90")
 
@@ -675,43 +705,11 @@ def recommend_price(
     global_profit_pct=0.8,
     local_profit_pct=0.9,
 ):
-    """
-    Rule-based pricing engine.
-
-    Logic:
-    1. Build fallback hierarchy:
-       competitor + same manufacturer
-       > competitor + same country of origin
-       > competitor + same region of origin
-       > competitor
-       > global
-
-    2. Take the first segment with a usable historical reference.
-       Preferred reference = p25-p75.
-       Safeguards:
-       - if p25-p75 collapses or price variation is too limited, widen or downgrade
-       - if distinct price levels are very few, use min-max as a cautious span
-       - if all observations share one repeated price, treat it as a point anchor
-
-    3. Build the model-supported good-profit band:
-       expected profit >= global_profit_pct * global max expected profit
-
-    4. If the historical reference overlaps with the model-supported band:
-       - recommended range = overlap
-       - recommended price = best expected-profit point inside overlap
-
-    5. If there is no overlap:
-       - optimize expected profit inside the historical reference only
-       - recommended range = prices inside that reference with profit >= local_profit_pct * local max
-
-    6. If only a point anchor exists:
-       - use a narrow soft band around the anchor for optimization
-       - if that still fails, return the anchor as a conservative fallback
-    """
     quantity = user_config.get("quantity")
     cost = user_config.get("cost")
+    global_profit = None
 
-    if quantity is None or cost is None:
+    if quantity is None:
         raise ValueError("user_config must contain non-null 'quantity' and 'cost'")
 
     segment_info = select_segment_band(
@@ -820,41 +818,68 @@ def recommend_price(
         rec["recommendation_text"] = build_recommendation_text(rec)
         return rec
 
-    global_profit = summarize_expected_profit(
-        pred_dist=pred_dist,
-        quantity=quantity,
-        cost=cost,
-        pct_of_max=global_profit_pct,
-    )
-    profit_band_global = global_profit["price_range_ge_pct_max"]
-    intersection_band = intersect_ranges(segment_band, profit_band_global)
+    if cost is None:
+        pred_band_q25_q50 = get_predicted_price_band(pred_dist, quantile_levels=(0.25, 0.5))
+        intersection_band = intersect_ranges(segment_band, pred_band_q25_q50)
 
-    if intersection_band is not None:
-        constrained = constrained_profit_summary(
-            pred_dist=pred_dist,
-            quantity=quantity,
-            cost=cost,
-            allowed_range=intersection_band,
-            pct_of_local_max=local_profit_pct,
-        )
+        if intersection_band is not None:
+            recommended_range = intersection_band
+            recommended_price = float(intersection_band[1])  # use q50 side of the surviving band
+            method = "intersection_of_segment_and_predicted_q25_q50_band"
+        else:
+            constrained_band = intersect_ranges(segment_band, pred_band_q25_q50)
+            if constrained_band is not None:
+                recommended_range = constrained_band
+                recommended_price = float(constrained_band[1])
+            else:
+                recommended_range = segment_band
+                recommended_price = float(segment_band[1])
+            method = "predicted_q25_q50_fallback_within_segment_band"
 
-        recommended_price = constrained["optimal_price"]
-        recommended_range = intersection_band
-        method = "intersection_of_segment_and_global_profit_band"
-        max_expected_profit = constrained["max_expected_profit"]
+        profit_band_global = pred_band_q25_q50
+        max_expected_profit = None
+        constrained = {
+            "optimal_price": recommended_price,
+            "max_expected_profit": None,
+            "price_range_ge_pct_local_max": recommended_range,
+        }
+
     else:
-        constrained = constrained_profit_summary(
+        global_profit = summarize_expected_profit(
             pred_dist=pred_dist,
             quantity=quantity,
             cost=cost,
-            allowed_range=segment_band,
-            pct_of_local_max=local_profit_pct,
+            pct_of_max=global_profit_pct,
         )
+        profit_band_global = global_profit["price_range_ge_pct_max"]
+        intersection_band = intersect_ranges(segment_band, profit_band_global)
 
-        recommended_price = constrained["optimal_price"]
-        recommended_range = constrained["price_range_ge_pct_local_max"]
-        method = "local_profit_optimization_within_segment_band"
-        max_expected_profit = constrained["max_expected_profit"]
+        if intersection_band is not None:
+            constrained = constrained_profit_summary(
+                pred_dist=pred_dist,
+                quantity=quantity,
+                cost=cost,
+                allowed_range=intersection_band,
+                pct_of_local_max=local_profit_pct,
+            )
+
+            recommended_price = constrained["optimal_price"]
+            recommended_range = intersection_band
+            method = "intersection_of_segment_and_global_profit_band"
+            max_expected_profit = constrained["max_expected_profit"]
+        else:
+            constrained = constrained_profit_summary(
+                pred_dist=pred_dist,
+                quantity=quantity,
+                cost=cost,
+                allowed_range=segment_band,
+                pct_of_local_max=local_profit_pct,
+            )
+
+            recommended_price = constrained["optimal_price"]
+            recommended_range = constrained["price_range_ge_pct_local_max"]
+            method = "local_profit_optimization_within_segment_band"
+            max_expected_profit = constrained["max_expected_profit"]
 
     if recommended_price is None:
         low, high = segment_band
