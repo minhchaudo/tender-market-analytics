@@ -9,6 +9,7 @@ from llm import llm
 from get_summary import get_info
 from price_rec import recommend_price
 import time
+from error import *
 
 class colnames:
     contractor_name = "contractor_name"
@@ -33,13 +34,6 @@ class colnames:
     origin = "origin"
     manufacturer = "manufacturer"
     province = "province"
-
-class EmptyQueryError(Exception):
-    pass
-class PredictFieldMissingError(Exception):
-    pass
-class TrainAndPredictError(Exception):
-    pass
 
 def handle_search_click():
     banner_search.empty()
@@ -256,12 +250,13 @@ with left_col:
             banner_search = st.empty()
             with banner_search:
                 if "query_error" in st.session_state and st.session_state["query_error"] is not None:
+                    e = st.session_state["query_error"]
                     print("=========== Exception ===========")
-                    print(st.session_state["query_error"])
-                    if isinstance(st.session_state["query_error"], EmptyQueryError):
+                    print(e)
+                    if isinstance(e, EmptyQueryError):
                         st.error("Please enter your query first.")
-                    elif isinstance(st.session_state["query_error"], SQLCompileError):
-                        st.error(str(st.session_state["query_error"]))
+                    elif isinstance(e, SQLCompileError):
+                        st.error(str(e))
                     else:
                         st.error("An error has occurred! Please check your query and try again. Hint: if your query involves multiple fields, wrap field-specific conditions in parentheses.")
             with raw_df_rows_count:
@@ -1548,28 +1543,91 @@ with right_col:
                                 )
                             )
 
-                            max_profit_line = alt.Chart(pd.DataFrame({"x": []})).mark_rule()
+                            profit_band_area = alt.Chart(pd.DataFrame({"x": [], "expected_profit": []})).mark_area()
+                            profit_band_lines = alt.Chart(pd.DataFrame({"x": [], "expected_profit": [], "y0": []})).mark_rule()
+                            band_boundary_points = alt.Chart(pd.DataFrame({"x": [], "expected_profit": []})).mark_point()
                             max_profit_point = alt.Chart(pd.DataFrame({"x": [], "expected_profit": []})).mark_point()
 
                             if not valid_profit_df.empty:
                                 max_idx = valid_profit_df["expected_profit"].idxmax()
                                 max_row = valid_profit_df.loc[[max_idx], ["x", "expected_profit"]]
 
-                                max_profit_line = (
-                                    alt.Chart(max_row)
-                                    .transform_calculate(
-                                        x_vnd="datum.x * 1000",
-                                        expected_profit_vnd="datum.expected_profit * 1000",
+                                threshold_profit = 0.8 * float(max_row["expected_profit"].iloc[0])
+                                band_df = valid_profit_df[valid_profit_df["expected_profit"] >= threshold_profit]
+
+                                if not band_df.empty:
+                                    left_idx = band_df["x"].idxmin()
+                                    right_idx = band_df["x"].idxmax()
+                                    bounds_df = valid_profit_df.loc[[left_idx, right_idx], ["x", "expected_profit"]]
+                                    bounds_df = bounds_df.copy()
+                                    bounds_df["y0"] = 0.0
+
+                                    band_min_x = float(bounds_df["x"].min())
+                                    band_max_x = float(bounds_df["x"].max())
+                                    max_expected_profit = float(max_row["expected_profit"].iloc[0])
+                                    band_area_df = valid_profit_df[
+                                        (valid_profit_df["x"] >= band_min_x) & (valid_profit_df["x"] <= band_max_x)
+                                    ].copy()
+                                    band_area_df["profit_low"] = threshold_profit
+                                    band_area_df["profit_high"] = max_expected_profit
+
+                                    profit_band_area = (
+                                        alt.Chart(band_area_df)
+                                        .transform_calculate(
+                                            x_vnd="datum.x * 1000",
+                                            expected_profit_vnd="datum.expected_profit * 1000",
+                                            profit_low_vnd="datum.profit_low * 1000",
+                                            profit_high_vnd="datum.profit_high * 1000",
+                                        )
+                                        .mark_area(color="#9db7d5", opacity=0.45)
+                                        .encode(
+                                            x=alt.X("x:Q", title="Unit price (thousand VND)"),
+                                            y=alt.Y(
+                                                "expected_profit:Q",
+                                                title="Expected profit (thousand VND)",
+                                                scale=alt.Scale(domainMin=0),
+                                            ),
+                                            tooltip=[
+                                                alt.Tooltip("profit_low_vnd:Q", title="Expected profit min (VND)", format=",.0f"),
+                                                alt.Tooltip("profit_high_vnd:Q", title="Expected profit max (VND)", format=",.0f"),
+                                            ],
+                                        )
                                     )
-                                    .mark_rule(color="#1f2937", strokeDash=[6, 6], strokeWidth=2)
-                                    .encode(
-                                        x=alt.X("x:Q"),
-                                        tooltip=[
-                                            alt.Tooltip("x_vnd:Q", title="Optimal unit price (VND)", format=",.0f"),
-                                            alt.Tooltip("expected_profit_vnd:Q", title="Maximum expected profit (VND)", format=",.0f"),
-                                        ],
+
+                                    profit_band_lines = (
+                                        alt.Chart(bounds_df)
+                                        .transform_calculate(
+                                            x_vnd="datum.x * 1000",
+                                            expected_profit_vnd="datum.expected_profit * 1000",
+                                        )
+                                        .mark_rule(color="#1f2937", strokeDash=[6, 6], strokeWidth=2)
+                                        .encode(
+                                            x=alt.X("x:Q"),
+                                            y=alt.Y("y0:Q"),
+                                            y2=alt.Y2("expected_profit:Q"),
+                                            tooltip=[
+                                                alt.Tooltip("x_vnd:Q", title="Unit price (VND)", format=",.0f"),
+                                                alt.Tooltip("expected_profit_vnd:Q", title="Expected profit (VND)", format=",.0f"),
+                                            ],
+                                        )
                                     )
-                                )
+
+                                    band_boundary_points = (
+                                        alt.Chart(bounds_df)
+                                        .transform_calculate(
+                                            x_vnd="datum.x * 1000",
+                                            expected_profit_vnd="datum.expected_profit * 1000",
+                                        )
+                                        .mark_point(color="#1f2937", size=70, filled=True)
+                                        .encode(
+                                            x=alt.X("x:Q"),
+                                            y=alt.Y("expected_profit:Q"),
+                                            tooltip=[
+                                                alt.Tooltip("x_vnd:Q", title="Unit price (VND)", format=",.0f"),
+                                                alt.Tooltip("expected_profit_vnd:Q", title="Expected profit (VND)", format=",.0f"),
+                                            ],
+                                        )
+                                    )
 
                                 max_profit_point = (
                                     alt.Chart(max_row)
@@ -1590,7 +1648,7 @@ with right_col:
 
                             with plot_space:
                                 st.altair_chart(
-                                    (profit_line + max_profit_line + max_profit_point)
+                                    (profit_band_area + profit_line + profit_band_lines + band_boundary_points + max_profit_point)
                                     .properties(height=280)
                                     .configure_view(stroke=None)
                                     .configure_axis(
