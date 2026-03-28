@@ -53,9 +53,9 @@ def format_pct(value, decimals=1):
 def reliability_label(n):
     if n is None or n == 0:
         return "No Data"
-    if n < 5:
-        return "Very Low"
     if n < 20:
+        return "Low"
+    if n < 50:
         return "Moderate"
     return "High"
 
@@ -112,7 +112,7 @@ def get_quantiles_df(
     target,
     map=None,
     quantiles=(0.1, 0.25, 0.5, 0.75, 0.9),
-    min_samples=5,
+    min_samples=20,
 ):
     filtered_df = df.copy()
 
@@ -312,7 +312,7 @@ def constrained_profit_summary(pred_dist, quantity, cost, allowed_range, pct_of_
     }
 
 
-def build_band_from_stats(qdict, min_samples=5):
+def build_band_from_stats(qdict, min_samples=20):
     """
     Returns:
         {
@@ -402,14 +402,16 @@ def build_logic_steps(
 ):  
     region_of_origin = COUNTRY_TO_REGION.get(user_config["country_of_origin"], "Other")
     source_map = {
-        "competitor_same_manufacturer": f"We first identified contractors that have previously won bids from {user_config["investor"]}, then reviewed their winning prices for products from {user_config["manufacturer"]}.",
-        "competitor_same_country": f"We first identified contractors that have previously won bids from {user_config["investor"]}, then reviewed their winning prices for products from {user_config["country_of_origin"]}.",
-        "competitor_same_region": f"We first identified contractors that have previously won bids from {user_config["investor"]}, then reviewed their winning prices for products from {region_of_origin}.",
-        "competitor": f"We first identified contractors that have previously won bids from {user_config["investor"]}, then reviewed their winning prices for this product.",
-        "global": f"We first reviewed all previous winning prices for this product.",
+        "competitor_same_manufacturer": f"We first identified contractors that have previously won bids from {user_config['investor']}, then gathered their winning prices for products from {user_config['manufacturer']}.",
+        "competitor_same_country": f"We first identified contractors that have previously won bids from {user_config['investor']}, then gathered their winning prices for products from {user_config['country_of_origin']}.",
+        "competitor_same_region": f"We first identified contractors that have previously won bids from {user_config['investor']}, then gathered their winning prices for products from {region_of_origin}.",
+        "same_manufacturer": f"We first gathered all previous winning prices for products from {user_config['manufacturer']}.",
+        "same_country": f"We first gathered all previous winning prices for products from {user_config['country_of_origin']}.",
+        "same_region": f"We first gathered all previous winning prices for products from {region_of_origin}.",
+        "competitor": f"We first identified contractors that have previously won bids from {user_config['investor']}, then gathered their winning prices for this product.",
+        "global": f"We first gathered all previous winning prices for this product.",
         None: "We used the available historical data as the reference point.",
     }
-
     steps = [
         source_map.get(segment_source, source_map[None]),
         f"This sample contains {segment_n} observations of winning prices. From this sample, we build the historical reference pricing range by considering price percentiles.",
@@ -530,7 +532,7 @@ def select_segment_band(
     df,
     user_config,
     quantiles=(0.1, 0.25, 0.5, 0.75, 0.9),
-    min_samples=5,
+    min_samples=20,
 ):
     region_of_origin = COUNTRY_TO_REGION.get(user_config["country_of_origin"], "Other")
 
@@ -580,6 +582,36 @@ def select_segment_band(
         )
         candidates.append(("competitor_same_region", q))
 
+    if not manu_missing:
+        q = get_quantiles_df(
+            df,
+            "unit_price",
+            map={"manufacturer": user_config["manufacturer"]},
+            quantiles=quantiles,
+            min_samples=min_samples,
+        )
+        candidates.append(("same_manufacturer", q))
+
+    if not coo_missing:
+        q = get_quantiles_df(
+            df,
+            "unit_price",
+            map={"country_of_origin": user_config["country_of_origin"]},
+            quantiles=quantiles,
+            min_samples=min_samples,
+        )
+        candidates.append(("same_country", q))
+
+    if not ror_missing:
+        q = get_quantiles_df(
+            df,
+            "unit_price",
+            map={"region_of_origin": region_of_origin},
+            quantiles=quantiles,
+            min_samples=min_samples,
+        )
+        candidates.append(("same_region", q))
+
     if len(competitors) > 0:
         q = get_quantiles_df(
             df,
@@ -603,7 +635,6 @@ def select_segment_band(
         if stats is None:
             continue
 
-        # Hard rule: never use a segment with population below min_samples.
         if stats.get("n", 0) < min_samples:
             continue
 
@@ -640,7 +671,7 @@ def recommend_price(
     pred_dist,
     pred_metrics,
     quantiles=(0.1, 0.25, 0.5, 0.75, 0.9),
-    min_samples=5,
+    min_samples=20,
     global_profit_pct=0.8,
     local_profit_pct=0.9,
 ):
