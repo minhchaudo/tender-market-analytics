@@ -212,7 +212,7 @@ def generate_date_range(cname: str):
         )
 
 
-st.set_page_config(page_title="Tender Market Analytics", layout="wide")
+st.set_page_config(page_title="Tender Analytics", layout="wide")
 st.markdown("""
 <style>
     [data-testid="stHeader"] {
@@ -227,7 +227,7 @@ st.markdown("""
 global_error_banner = st.empty()
 global_error_banner.empty()
 
-st.title("Tender Market Analytics", text_alignment="center")
+st.title("Tender Analytics", text_alignment="center")
 left_col, right_col = st.columns([3, 7], gap="large")
 ALL_CONTENT_HEIGHT = 700
 with left_col:
