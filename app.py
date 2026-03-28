@@ -404,45 +404,48 @@ try:
                                 .sort_values(by=colnames.total_price, ascending=False)
                                 .head(10)
                             )
-                            st.altair_chart(
-                                alt.Chart(data)
-                                .transform_calculate(
-                                    total_price_vnd=f"datum[{colnames.total_price!r}] * {total_price_factor}"
-                                )
-                                .mark_bar()
-                                .encode(
-                                    x=alt.X(
-                                        colnames.total_price,
-                                        title=f"Total value ({unit_total_price})",
-                                    ),
-                                    y=alt.Y(
-                                        colnames.investor,
-                                        title="Investor",
-                                        sort="-x",
-                                        axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None),
-                                    ),
-                                    tooltip=[
-                                        alt.Tooltip(
+
+                            _, plot_space, _ = st.columns([1, 8, 1])
+                            with plot_space:
+                                st.altair_chart(
+                                    alt.Chart(data)
+                                    .transform_calculate(
+                                        total_price_vnd=f"datum[{colnames.total_price!r}] * {total_price_factor}"
+                                    )
+                                    .mark_bar()
+                                    .encode(
+                                        x=alt.X(
+                                            colnames.total_price,
+                                            title=f"Total value ({unit_total_price})",
+                                        ),
+                                        y=alt.Y(
                                             colnames.investor,
                                             title="Investor",
+                                            sort="-x",
+                                            axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None),
                                         ),
-                                        alt.Tooltip(
-                                            "total_price_vnd:Q",
-                                            title="Total value (VND)",
-                                            format=",.0f",
-                                        ),
-                                    ],
+                                        tooltip=[
+                                            alt.Tooltip(
+                                                colnames.investor,
+                                                title="Investor",
+                                            ),
+                                            alt.Tooltip(
+                                                "total_price_vnd:Q",
+                                                title="Total value (VND)",
+                                                format=",.0f",
+                                            ),
+                                        ],
+                                    )
+                                    .properties(height=alt.Step(36))
+                                    .configure_view(stroke=None)
+                                    .configure_axis(
+                                        labelColor="black",
+                                        titleColor="black",
+                                        labelFontSize=16,
+                                        titleFontSize=16,
+                                    ).interactive(),
+                                    width="stretch",
                                 )
-                                .properties(height=alt.Step(36))
-                                .configure_view(stroke=None)
-                                .configure_axis(
-                                    labelColor="black",
-                                    titleColor="black",
-                                    labelFontSize=16,
-                                    titleFontSize=16,
-                                ),
-                                width="stretch",
-                            )
                         with st.container():
                             st.subheader("Top contractors", help=help_top_contractors)
 
@@ -452,45 +455,48 @@ try:
                                 .sort_values(by=colnames.total_price, ascending=False)
                                 .head(10)
                             )
-                            st.altair_chart(
-                                alt.Chart(data)
-                                .transform_calculate(
-                                    total_price_vnd=f"datum['{colnames.total_price}'] * {total_price_factor}"
-                                )
-                                .mark_bar()
-                                .encode(
-                                    x=alt.X(
-                                        colnames.total_price,
-                                        title=f"Total value ({unit_total_price})",
-                                    ),
-                                    y=alt.Y(
-                                        colnames.contractor_name,
-                                        title="Contractor",
-                                        sort="-x",
-                                        axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None),
-                                    ),
-                                    tooltip=[
-                                        alt.Tooltip(
+
+                            _, plot_space, _ = st.columns([1, 8, 1])
+                            with plot_space:
+                                st.altair_chart(
+                                    alt.Chart(data)
+                                    .transform_calculate(
+                                        total_price_vnd=f"datum['{colnames.total_price}'] * {total_price_factor}"
+                                    )
+                                    .mark_bar()
+                                    .encode(
+                                        x=alt.X(
+                                            colnames.total_price,
+                                            title=f"Total value ({unit_total_price})",
+                                        ),
+                                        y=alt.Y(
                                             colnames.contractor_name,
                                             title="Contractor",
+                                            sort="-x",
+                                            axis=alt.Axis(labelLimit=400, labelOverlap=False, title=None),
                                         ),
-                                        alt.Tooltip(
-                                            "total_price_vnd:Q",
-                                            title="Total value (VND)",
-                                            format=",.0f",
-                                        ),
-                                    ],
-                                )
-                                .properties(height=alt.Step(36))
-                                .configure_view(stroke=None)
-                                .configure_axis(
-                                    labelColor="black",
-                                    titleColor="black",
-                                    labelFontSize=16,
-                                    titleFontSize=16,
-                                ),
-                                width="stretch",
-                            ) 
+                                        tooltip=[
+                                            alt.Tooltip(
+                                                colnames.contractor_name,
+                                                title="Contractor",
+                                            ),
+                                            alt.Tooltip(
+                                                "total_price_vnd:Q",
+                                                title="Total value (VND)",
+                                                format=",.0f",
+                                            ),
+                                        ],
+                                    )
+                                    .properties(height=alt.Step(36))
+                                    .configure_view(stroke=None)
+                                    .configure_axis(
+                                        labelColor="black",
+                                        titleColor="black",
+                                        labelFontSize=16,
+                                        titleFontSize=16,
+                                    ).interactive(),
+                                    width="stretch",
+                                ) 
                         with st.container():
                             st.subheader("Unit price distribution", help=help_unit_price)
 
@@ -551,18 +557,20 @@ try:
                                 )
                             )
 
-                            st.altair_chart(
-                                (background + bars)
-                                .properties(height=alt.Step(36))
-                                .configure_view(stroke=None)
-                                .configure_axis(
-                                    labelColor="black",
-                                    titleColor="black",
-                                    labelFontSize=16,
-                                    titleFontSize=16,
-                                ),
-                                width="stretch",
-                            )
+                            _, plot_space, _ = st.columns([1, 8, 1])
+                            with plot_space:
+                                st.altair_chart(
+                                    (background + bars)
+                                    .properties(height=alt.Step(36))
+                                    .configure_view(stroke=None)
+                                    .configure_axis(
+                                        labelColor="black",
+                                        titleColor="black",
+                                        labelFontSize=16,
+                                        titleFontSize=16,
+                                    ).interactive(),
+                                    width="stretch",
+                                )
 
                         with st.container():
                             st.subheader("Unit price by contractor", help=help_unit_price_by_contractor)
@@ -688,18 +696,20 @@ try:
                                 ],
                             )
 
-                            st.altair_chart(
-                                (whiskers + box + median_tick + outliers)
-                                .properties(height=alt.Step(36))
-                                .configure_view(stroke=None)
-                                .configure_axis(
-                                    labelColor="black",
-                                    titleColor="black",
-                                    labelFontSize=16,
-                                    titleFontSize=16,
-                                ),
-                                width="stretch",
-                            )
+                            _, plot_space, _ = st.columns([1, 8, 1])
+                            with plot_space:
+                                st.altair_chart(
+                                    (whiskers + box + median_tick + outliers)
+                                    .properties(height=alt.Step(36))
+                                    .configure_view(stroke=None)
+                                    .configure_axis(
+                                        labelColor="black",
+                                        titleColor="black",
+                                        labelFontSize=16,
+                                        titleFontSize=16,
+                                    ).interactive(),
+                                    width="stretch",
+                                )
 
                         with st.container():
                             st.subheader("Unit price by country of origin", help=help_unit_price_by_country_origin)
@@ -821,18 +831,20 @@ try:
                                 ],
                             )
 
-                            st.altair_chart(
-                                (whiskers + box + median_tick + outliers)
-                                .properties(height=alt.Step(36))
-                                .configure_view(stroke=None)
-                                .configure_axis(
-                                    labelColor="black",
-                                    titleColor="black",
-                                    labelFontSize=16,
-                                    titleFontSize=16,
-                                ),
-                                width="stretch",
-                            )
+                            _, plot_space, _ = st.columns([1, 8, 1])
+                            with plot_space:
+                                st.altair_chart(
+                                    (whiskers + box + median_tick + outliers)
+                                    .properties(height=alt.Step(36))
+                                    .configure_view(stroke=None)
+                                    .configure_axis(
+                                        labelColor="black",
+                                        titleColor="black",
+                                        labelFontSize=16,
+                                        titleFontSize=16,
+                                    ).interactive(),
+                                    width="stretch",
+                                )
 
 
                         with st.container():
@@ -955,18 +967,20 @@ try:
                                 ],
                             )
 
-                            st.altair_chart(
-                                (whiskers + box + median_tick + outliers)
-                                .properties(height=alt.Step(36))
-                                .configure_view(stroke=None)
-                                .configure_axis(
-                                    labelColor="black",
-                                    titleColor="black",
-                                    labelFontSize=16,
-                                    titleFontSize=16,
-                                ),
-                                width="stretch",
-                            )
+                            _, plot_space, _ = st.columns([1, 8, 1])
+                            with plot_space:
+                                st.altair_chart(
+                                    (whiskers + box + median_tick + outliers)
+                                    .properties(height=alt.Step(36))
+                                    .configure_view(stroke=None)
+                                    .configure_axis(
+                                        labelColor="black",
+                                        titleColor="black",
+                                        labelFontSize=16,
+                                        titleFontSize=16,
+                                    ).interactive(),
+                                    width="stretch",
+                                )
 
                         with st.container():
                             st.subheader("Total value by country of origin", help=help_total_value_by_country_origin)
@@ -1005,44 +1019,46 @@ try:
                                 .index.tolist()
                             )
 
-                            st.altair_chart(
-                                alt.Chart(data)
-                                .transform_calculate(
-                                    total_price_vnd=f"datum['{colnames.total_price}'] * {total_price_factor}"
-                                )
-                                .mark_arc()
-                                .encode(
-                                    theta=alt.Theta(
-                                        colnames.total_price,
-                                        title=f"Total price ({unit_total_price})",
-                                        sort="x",
-                                    ),
-                                    color=alt.Color(
-                                        colnames.country_origin,
-                                        sort=country_order,
-                                        legend=alt.Legend(
-                                            title="Country of origin",
-                                            labelColor="black",
-                                            titleColor="black",
-                                            labelFontSize=16,
-                                            titleFontSize=16,
+                            _, plot_space, _ = st.columns([1, 8, 1])
+                            with plot_space:
+                                st.altair_chart(
+                                    alt.Chart(data)
+                                    .transform_calculate(
+                                        total_price_vnd=f"datum['{colnames.total_price}'] * {total_price_factor}"
+                                    )
+                                    .mark_arc()
+                                    .encode(
+                                        theta=alt.Theta(
+                                            colnames.total_price,
+                                            title=f"Total price ({unit_total_price})",
+                                            sort="x",
                                         ),
-                                    ),
-                                    order=alt.Order(colnames.total_price, sort="descending"),
-                                    tooltip=[
-                                        alt.Tooltip(
+                                        color=alt.Color(
                                             colnames.country_origin,
-                                            title="Country of origin",
+                                            sort=country_order,
+                                            legend=alt.Legend(
+                                                title="Country of origin",
+                                                labelColor="black",
+                                                titleColor="black",
+                                                labelFontSize=16,
+                                                titleFontSize=16,
+                                            ),
                                         ),
-                                        alt.Tooltip(
-                                            "total_price_vnd:Q",
-                                            title="Total price (VND)",
-                                            format=",.0f",
-                                        ),
-                                    ],
-                                ),
-                                width="stretch",
-                            )
+                                        order=alt.Order(colnames.total_price, sort="descending"),
+                                        tooltip=[
+                                            alt.Tooltip(
+                                                colnames.country_origin,
+                                                title="Country of origin",
+                                            ),
+                                            alt.Tooltip(
+                                                "total_price_vnd:Q",
+                                                title="Total price (VND)",
+                                                format=",.0f",
+                                            ),
+                                        ],
+                                    ).interactive(),
+                                    width="stretch",
+                                )
 
                         with st.container():
                             st.subheader("Total value by region of origin", help=help_total_value_by_region_origin)
@@ -1081,41 +1097,43 @@ try:
                                 .index.tolist()
                             )
 
-                            st.altair_chart(
-                                alt.Chart(data)
-                                .transform_calculate(
-                                    total_price_vnd=f"datum['{colnames.total_price}'] * {total_price_factor}"
+                            _, plot_space, _ = st.columns([1, 8, 1])
+                            with plot_space:
+                                st.altair_chart(
+                                    alt.Chart(data)
+                                    .transform_calculate(
+                                        total_price_vnd=f"datum['{colnames.total_price}'] * {total_price_factor}"
+                                    )
+                                    .mark_arc()
+                                    .encode(
+                                        theta=alt.Theta(
+                                            colnames.total_price,
+                                            title=f"Total price ({unit_total_price})",
+                                            sort="x",
+                                        ),
+                                        color=alt.Color(
+                                            colnames.region_origin,
+                                            sort=region_order,
+                                            legend=alt.Legend(
+                                                title="Region of origin",
+                                                labelColor="black",
+                                                titleColor="black",
+                                                labelFontSize=16,
+                                                titleFontSize=16,
+                                            ),
+                                        ),
+                                        order=alt.Order(colnames.total_price, sort="descending"),
+                                        tooltip=[
+                                            alt.Tooltip(colnames.region_origin, title="Region of origin"),
+                                            alt.Tooltip(
+                                                "total_price_vnd:Q",
+                                                title="Total price (VND)",
+                                                format=",.0f",
+                                            ),
+                                        ],
+                                    ).interactive(),
+                                    width="stretch",
                                 )
-                                .mark_arc()
-                                .encode(
-                                    theta=alt.Theta(
-                                        colnames.total_price,
-                                        title=f"Total price ({unit_total_price})",
-                                        sort="x",
-                                    ),
-                                    color=alt.Color(
-                                        colnames.region_origin,
-                                        sort=region_order,
-                                        legend=alt.Legend(
-                                            title="Region of origin",
-                                            labelColor="black",
-                                            titleColor="black",
-                                            labelFontSize=16,
-                                            titleFontSize=16,
-                                        ),
-                                    ),
-                                    order=alt.Order(colnames.total_price, sort="descending"),
-                                    tooltip=[
-                                        alt.Tooltip(colnames.region_origin, title="Region of origin"),
-                                        alt.Tooltip(
-                                            "total_price_vnd:Q",
-                                            title="Total price (VND)",
-                                            format=",.0f",
-                                        ),
-                                    ],
-                                ),
-                                width="stretch",
-                            )
                         
                         with st.container():
                             st.subheader("Total value by manufacturer", help=help_total_value_by_manufacturer)
@@ -1150,37 +1168,40 @@ try:
                                 .sort_values(ascending=False) 
                                 .index.tolist()
                             )
-                            st.altair_chart(
-                                alt.Chart(data)
-                                .transform_calculate(
-                                    total_price_vnd=f"datum['{colnames.total_price}'] * {total_price_factor}"
+
+                            _, plot_space, _ = st.columns([1, 8, 1])
+                            with plot_space:
+                                st.altair_chart(
+                                    alt.Chart(data)
+                                    .transform_calculate(
+                                        total_price_vnd=f"datum['{colnames.total_price}'] * {total_price_factor}"
+                                    )
+                                    .mark_arc()
+                                    .encode(
+                                        theta=alt.Theta(colnames.total_price, title=f"Total price ({unit_total_price})", sort="x"),
+                                        color=alt.Color(
+                                            colnames.manufacturer,
+                                            sort=manu_order,
+                                            legend=alt.Legend(
+                                                title="Manufacturer",
+                                                labelColor="black",
+                                                titleColor="black",
+                                                labelFontSize=16,
+                                                titleFontSize=16,
+                                            ),
+                                        ),
+                                        order=alt.Order(colnames.total_price, sort="descending"),
+                                        tooltip=[
+                                            alt.Tooltip(colnames.manufacturer, title="Manufacturer"),
+                                            alt.Tooltip(
+                                                "total_price_vnd:Q",
+                                                title=f"Total price (VND)",
+                                                format=",.0f",
+                                            ),
+                                        ],
+                                    ).interactive(),
+                                    width="stretch",
                                 )
-                                .mark_arc()
-                                .encode(
-                                    theta=alt.Theta(colnames.total_price, title=f"Total price ({unit_total_price})", sort="x"),
-                                    color=alt.Color(
-                                        colnames.manufacturer,
-                                        sort=manu_order,
-                                        legend=alt.Legend(
-                                            title="Manufacturer",
-                                            labelColor="black",
-                                            titleColor="black",
-                                            labelFontSize=16,
-                                            titleFontSize=16,
-                                        ),
-                                    ),
-                                    order=alt.Order(colnames.total_price, sort="descending"),
-                                    tooltip=[
-                                        alt.Tooltip(colnames.manufacturer, title="Manufacturer"),
-                                        alt.Tooltip(
-                                            "total_price_vnd:Q",
-                                            title=f"Total price (VND)",
-                                            format=",.0f",
-                                        ),
-                                    ],
-                                ),
-                                width="stretch",
-                            )
         with tab2:
             with st.container(height=ALL_CONTENT_HEIGHT, border=True):
                 if not "data" in st.session_state:
@@ -1515,7 +1536,7 @@ try:
                             )
 
                             st.subheader("Predicted winning bid price distribution")
-                            _, plot_space, metrics_space = st.columns([1, 8, 1])
+                            _, plot_space, _ = st.columns([1, 8, 1])
                             with plot_space:
                                 st.altair_chart(
                                     (summary_bg + density_chart + density_outline + q_rules + q_points)
@@ -1526,7 +1547,7 @@ try:
                                         titleColor="black",
                                         labelFontSize=14,
                                         titleFontSize=14,
-                                    ),
+                                    ).interactive(),
                                     width="stretch"
                                 )
 
@@ -1534,7 +1555,7 @@ try:
                             cost = st.session_state["latest_pred"]["user_config"]["cost"]
                             if cost is not None:
                                 st.subheader("Proxy for expected profit", help=help_profit_proxy)
-                                _, plot_space, _ = st.columns([1, 8, 1])
+
                                 x_vals = density_df["x"].to_numpy(dtype=float)
                                 log_x_vals = np.log(np.clip(x_vals, 1e-12, None))
 
@@ -1676,6 +1697,7 @@ try:
                                         )
                                     )
 
+                                _, plot_space, _ = st.columns([1, 8, 1])
                                 with plot_space:
                                     st.altair_chart(
                                         (profit_band_area + profit_line + profit_band_lines + band_boundary_points + max_profit_point)
@@ -1686,7 +1708,7 @@ try:
                                             titleColor="black",
                                             labelFontSize=14,
                                             titleFontSize=14,
-                                        ),
+                                        ).interactive(),
                                         width="stretch",
                                     )
                         st.subheader("Pricing strategy recommendation")
