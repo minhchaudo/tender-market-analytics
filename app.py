@@ -1722,7 +1722,7 @@ try:
                         llm_sec = st.empty()
                         with llm_sec:
                             if st.button("🦦 Summarize for decision-making"):
-                                llm_contain = st.chat_message(name="assistant", avatar="🦦")
+                                llm_contain = st.chat_message(name="assistant")
                                 content = llm_contain.empty()
                                 if st.session_state["latest_pred"]["summary"] is None:
                                     for t in range(3):
