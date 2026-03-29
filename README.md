@@ -12,11 +12,16 @@ cd tender-market-analytics
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+```
+
+Create a `.env` file with `OPENAI_API_KEY=<YOUR_API_KEY_HERE>`, and run
+
+```
 streamlit run app.py
 ```
 
-See help tooltips (?) for instructions and recommendations.
+See help tooltips `(?)` in the app for instructions and recommendations.
 
 ### Acknowledgements
 
-Data is retrieved from [muasamcong](https://muasamcong.mpi.gov.vn/)
+Data is retrieved from [muasamcong](https://muasamcong.mpi.gov.vn/).
