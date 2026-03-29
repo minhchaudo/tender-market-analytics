@@ -281,7 +281,7 @@ class ResidualDoubleCVSafe(ResidualDouble):
         distr_params=None,
         use_y_pred=False,
         cv=None,
-        min_scale=0.01): # +/- 8.6%
+        min_scale=0.05): # +/- 8.6%
         super().__init__(estimator,
                         estimator_resid,
                         residual_trafo,

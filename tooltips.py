@@ -80,9 +80,6 @@ tooltip_stats = {
 }
 
 help_test_results = "Model performance on historical data"
-help_profit_proxy = "Expected profit, `unit price x quantity - cost`, adjusted by a proxy for win likelihood based on the predicted winning price distribution."
+help_profit_proxy = "Expected profit, `unit price x quantity - cost`, adjusted by a proxy for win likelihood based on the predicted winning price distribution. The shaded region shows the unit price range where expected profit >= 80% of max expected profit."
 help_training_data = "Best practice: query a single product and use all retrieved data for more stable predictions. Use filtered data only when there is enough data and you need scenario-specific insights."
-
-
-
 

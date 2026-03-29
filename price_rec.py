@@ -72,8 +72,8 @@ def diversity_label(unique_n):
     return "Normal Variation"
 
 
-def model_quality_label(pred_metrics, global_median_price):
-    if pred_metrics is None or global_median_price is None or global_median_price <= 0:
+def model_quality_label(pred_metrics, global_max_price):
+    if pred_metrics is None or global_max_price is None or global_max_price <= 0:
         return "Unknown"
 
     mae_k = pred_metrics["MAE"]  
@@ -84,23 +84,21 @@ def model_quality_label(pred_metrics, global_median_price):
 
     if mae_k is not None and np.isfinite(mae_k):
         mae_vnd = mae_k * 1000
-        rel_mae = mae_vnd / global_median_price
+        rel_mae = mae_vnd / global_max_price
         if rel_mae <= 0.10:
             score += 2
         elif rel_mae <= 0.20:
             score += 1
 
     if cov50 is not None and np.isfinite(cov50):
-        if 0.40 <= cov50 <= 0.60:
+        if 0.4 <= cov50 <= 0.6:
             score += 1
 
     if cov90 is not None and np.isfinite(cov90):
-        if 0.80 <= cov90 <= 0.98:
-            score += 2
-        elif 0.70 <= cov90 < 0.80:
+        if 0.8 <= cov90 <= 1.0:
             score += 1
 
-    if score >= 4:
+    if score >= 3:
         return "Good"
     if score >= 2:
         return "Reasonable"
@@ -388,11 +386,11 @@ def narrow_band_around_point(point, width_pct=0.05):
     return None
 
 
-def get_global_median_price(df):
+def get_global_max_price(df):
     series = df["unit_price"].dropna()
     if len(series) == 0:
         return None
-    return float(series.median())
+    return float(series.max())
 
 
 def build_logic_steps(
@@ -490,9 +488,9 @@ def build_logic_steps(
     return steps
 
 
-def build_risk_text(segment_n, segment_unique_n, pred_metrics, segment_source, global_median_price):
+def build_risk_text(segment_n, segment_unique_n, pred_metrics, segment_source, global_max_price):
     hist_conf = reliability_label(segment_n)
-    model_quality = model_quality_label(pred_metrics, global_median_price)
+    model_quality = model_quality_label(pred_metrics, global_max_price)
 
     risk_parts = [
         f"The historical reference has {hist_conf.lower()} confidence level.\n"
@@ -510,11 +508,11 @@ def build_risk_text(segment_n, segment_unique_n, pred_metrics, segment_source, g
 
         if (
             mae_vnd is not None
-            and global_median_price is not None
-            and np.isfinite(global_median_price)
-            and global_median_price > 0
+            and global_max_price is not None
+            and np.isfinite(global_max_price)
+            and global_max_price > 0
         ):
-            rel_mae = mae_vnd / global_median_price
+            rel_mae = mae_vnd / global_max_price
 
         risk_parts.append(
             f"- The model quality is {model_quality.lower()}.\n"
@@ -725,7 +723,7 @@ def recommend_price(
     segment_band_type = segment_info["selected_band_type"]
     segment_anchor = segment_info["selected_anchor"]
 
-    global_median_price = get_global_median_price(df)
+    global_max_price = get_global_max_price(df)
 
     if segment_stats is None:
         rec = {
@@ -768,7 +766,7 @@ def recommend_price(
             "details": {
                 **segment_info,
                 "pred_metrics": pred_metrics,
-                "global_median_price": global_median_price,
+                "global_max_price": global_max_price,
             },
         }
         rec["logic_steps"] = build_logic_steps(
@@ -788,7 +786,7 @@ def recommend_price(
             segment_unique_n=segment_stats.get("unique_n"),
             pred_metrics=pred_metrics,
             segment_source=segment_source,
-            global_median_price=global_median_price,
+            global_max_price=global_max_price,
         )
         rec["recommendation_text"] = build_recommendation_text(rec)
         return rec
@@ -810,7 +808,7 @@ def recommend_price(
             "details": {
                 **segment_info,
                 "pred_metrics": pred_metrics,
-                "global_median_price": global_median_price,
+                "global_max_price": global_max_price,
             },
             "logic_steps": [],
             "risk_text": "A relevant historical segment was found, but no usable price reference could be constructed from it.",
@@ -824,7 +822,7 @@ def recommend_price(
 
         if intersection_band is not None:
             recommended_range = intersection_band
-            recommended_price = float(intersection_band[1])  # use q50 side of the surviving band
+            recommended_price = float(intersection_band[1])  
             method = "intersection_of_segment_and_predicted_q25_q50_band"
         else:
             constrained_band = intersect_ranges(segment_band, pred_band_q25_q50)
@@ -909,7 +907,7 @@ def recommend_price(
             "global_profit_summary": global_profit,
             "constrained_summary": constrained,
             "pred_metrics": pred_metrics,
-            "global_median_price": global_median_price,
+            "global_max_price": global_max_price,
         },
     }
 
@@ -931,7 +929,7 @@ def recommend_price(
         segment_unique_n=segment_stats.get("unique_n"),
         pred_metrics=pred_metrics,
         segment_source=segment_source,
-        global_median_price=global_median_price,
+        global_max_price=global_max_price,
     )
 
     rec["recommendation_text"] = build_recommendation_text(rec)

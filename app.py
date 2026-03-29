@@ -6,7 +6,6 @@ from query_logic import query, SQLCompileError
 from prob_modeling import train_model, predict
 from tooltips import *
 from llm import llm
-from get_summary import get_info
 from price_rec import recommend_price
 import time
 from error import *
@@ -1639,8 +1638,8 @@ try:
                                                     scale=alt.Scale(domainMin=0),
                                                 ),
                                                 tooltip=[
-                                                    alt.Tooltip("profit_low_vnd:Q", title="Expected profit min (VND)", format=",.0f"),
-                                                    alt.Tooltip("profit_high_vnd:Q", title="Expected profit max (VND)", format=",.0f"),
+                                                    alt.Tooltip("profit_low_vnd:Q", title="Good profit range (min, VND)", format=",.0f"),
+                                                    alt.Tooltip("profit_high_vnd:Q", title="Good profit range (max, VND)", format=",.0f"),
                                                 ],
                                             )
                                         )
@@ -1721,7 +1720,7 @@ try:
                         st.write(rule_based_rec)
                         llm_sec = st.empty()
                         with llm_sec:
-                            if st.button("🦦 Summarize for decision-making"):
+                            if st.button("🤖 Summarize for decision-making"):
                                 llm_contain = st.chat_message(name="assistant")
                                 content = llm_contain.empty()
                                 if st.session_state["latest_pred"]["summary"] is None:
